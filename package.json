@@ -12,6 +12,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+  "release": "npm run build && powershell -ExecutionPolicy ByPass -File tools\\publish_copy.ps1",
     "compare:live": "powershell -ExecutionPolicy ByPass -File tools\\fetch_and_compare.ps1",
     "fetch:assets": "powershell -ExecutionPolicy ByPass -File tools\\fetch_all_assets.ps1",
     "compare:full": "npm run compare:live && npm run fetch:assets",
