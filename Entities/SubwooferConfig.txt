@@ -1,0 +1,86 @@
+{
+  "name": "SubwooferConfig",
+  "type": "object",
+  "properties": {
+    "nome_configurazione": {
+      "type": "string",
+      "description": "Nome della configurazione"
+    },
+    "numero_subwoofer": {
+      "type": "integer",
+      "description": "Numero di subwoofer",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "taglio": {
+      "type": "string",
+      "enum": [
+        "12\"",
+        "15\"",
+        "18\"",
+        "21\"",
+        "24\""
+      ],
+      "description": "Dimensione del subwoofer in pollici"
+    },
+    "frequenza_crossover": {
+      "type": "number",
+      "description": "Frequenza di crossover in Hz",
+      "minimum": 20,
+      "maximum": 200
+    },
+    "setup_primario": {
+      "type": "string",
+      "enum": [
+        "endfire",
+        "gradient",
+        "arc"
+      ],
+      "description": "Tipologia di setup principale"
+    },
+    "setup_secondario": {
+      "type": "string",
+      "enum": [
+        "nessuno",
+        "arc"
+      ],
+      "description": "Tipologia di setup combinato"
+    },
+    "numero_linee": {
+      "type": "integer",
+      "description": "Numero di linee/righe per disposizione (minimo 2 per Endfire/Gradient)",
+      "minimum": 2,
+      "maximum": 20
+    },
+    "gradi_arc": {
+      "type": "number",
+      "description": "Gradi di radiazione per arc",
+      "minimum": 30,
+      "maximum": 270
+    },
+    "numero_sub_arc": {
+      "type": "integer",
+      "description": "Numero di subwoofer per la configurazione Arc",
+      "minimum": 2,
+      "maximum": 50
+    },
+    "larghezza_massima": {
+      "type": "number",
+      "description": "Larghezza massima di posizionamento in metri",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "note": {
+      "type": "string",
+      "description": "Note aggiuntive sulla configurazione"
+    }
+  },
+  "required": [
+    "nome_configurazione",
+    "numero_subwoofer",
+    "taglio",
+    "frequenza_crossover",
+    "setup_primario",
+    "larghezza_massima"
+  ]
+}

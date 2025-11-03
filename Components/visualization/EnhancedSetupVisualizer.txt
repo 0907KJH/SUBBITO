@@ -1,0 +1,340 @@
+import React from 'react';
+import { useTheme } from '@/components/ThemeContext';
+
+export default function EnhancedSetupVisualizer({ positions, dimensions, config, results }) {
+    const { isDarkTheme } = useTheme();
+    
+    if (!positions || positions.length === 0) return null;
+
+    const subSize = 0.5;
+    const fixedSpacing = 1.2;
+    const lineSpacing = 1.5;
+    const padding = 0.8;
+    
+    const isStackCardioid = config.setup_primario === 'stack_cardioid';
+    
+    // Colori dinamici per tema
+    const textColor = isDarkTheme ? 'white' : '#1e293b';
+    const lineColor = isDarkTheme ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+    const cardBg = isDarkTheme ? 'bg-slate-800/50' : 'bg-gray-100';
+    const cardBorder = isDarkTheme ? 'border-slate-700' : 'border-gray-300';
+    const cardTextPrimary = isDarkTheme ? 'text-slate-400' : 'text-slate-600';
+    const cardTextValue = isDarkTheme ? 'text-green-400' : 'text-green-600';
+    
+    if (isStackCardioid) {
+        const maxDisplayX = (positions.length - 1) * fixedSpacing;
+        
+        let maxModuleDisplayY = 0;
+        if (positions.length > 0 && positions[0].modules) {
+            const numModules = positions[0].modules.length;
+            const lastModuleIdx = numModules - 1;
+            const baseModuleYForLastModule = 0.6 + lastModuleIdx * 0.7;
+            const maxCumulativeExtraSpace = lastModuleIdx > 0 ? lastModuleIdx * 0.5 : 0; 
+            maxModuleDisplayY = baseModuleYForLastModule + maxCumulativeExtraSpace + 0.50; 
+        }
+
+        const viewWidth = maxDisplayX + padding * 2;
+        const viewHeight = 0.5 + 0.5 + maxModuleDisplayY;
+        
+        const viewBoxMinX = -padding;
+        const viewBoxMinY = -0.5;
+        
+        return (
+            <div className="w-full space-y-4">
+                <svg 
+                    viewBox={`${viewBoxMinX} ${viewBoxMinY} ${viewWidth} ${viewHeight}`} 
+                    className="w-full"
+                    style={{ height: '500px' }}
+                    preserveAspectRatio="xMidYMid meet"
+                >
+                    <defs>
+                        <pattern id="grid" width="0.5" height="0.5" patternUnits="userSpaceOnUse">
+                            <path d="M 0.5 0 L 0 0 0 0.5" fill="none" stroke={lineColor} strokeWidth="0.01"/>
+                        </pattern>
+                    </defs>
+                    <rect x={viewBoxMinX} y={viewBoxMinY} width={viewWidth} height={viewHeight} fill="url(#grid)" />
+
+                    {positions.map((stack, stackIdx) => {
+                        const displayX = stackIdx * fixedSpacing;
+                        const displayY = 0;
+                        
+                        return (
+                            <g key={stack.id}>
+                                {stackIdx === 0 && (
+                                    <text 
+                                        x={-0.4} 
+                                        y={displayY} 
+                                        fill={textColor}
+                                        fontSize="0.35" 
+                                        fontWeight="bold"
+                                        textAnchor="end"
+                                        dominantBaseline="middle"
+                                    >
+                                        L1
+                                    </text>
+                                )}
+                                
+                                <circle 
+                                    cx={displayX} 
+                                    cy={displayY} 
+                                    r={subSize / 2} 
+                                    fill="rgb(100, 116, 139)"
+                                    stroke={textColor}
+                                    strokeWidth="0.04"
+                                />
+                                
+                                {stack.modules && stack.modules.map((module, moduleIdx) => {
+                                    let extraSpace = 0;
+                                    for (let i = 0; i < moduleIdx; i++) {
+                                        if (stack.modules[i].fisicamente_invertito === true) {
+                                            extraSpace += 0.5;
+                                        }
+                                    }
+                                    
+                                    const yOffset = displayY + 0.6 + moduleIdx * 0.7 + extraSpace;
+                                    const moduleLabel = module.polarity === -1 ? "rev" : "norm";
+                                    const delayText = config.unita_ritardo === "ms" 
+                                        ? `${module.delay.toFixed(1)}ms` 
+                                        : `${((module.delay / 1000) * 343).toFixed(2)}m`;
+                                    const isReversed = module.fisicamente_invertito === true;
+                                    
+                                    return (
+                                        <g key={moduleIdx}>
+                                            <text 
+                                                x={displayX} 
+                                                y={yOffset} 
+                                                fill={isReversed ? "rgb(59, 130, 246)" : textColor}
+                                                fontSize="0.25" 
+                                                fontWeight="bold"
+                                                textAnchor="middle"
+                                            >
+                                                {module.moduleIndex} {moduleLabel}
+                                            </text>
+                                            {isReversed && (
+                                                <text 
+                                                    x={displayX} 
+                                                    y={yOffset + 0.25}
+                                                    fill="rgb(59, 130, 246)" 
+                                                    fontSize="0.18" 
+                                                    fontWeight="bold"
+                                                    textAnchor="middle"
+                                                >
+                                                    GIRATO
+                                                </text>
+                                            )}
+                                            <text 
+                                                x={displayX} 
+                                                y={yOffset + (isReversed ? 0.50 : 0.30)}
+                                                fill={module.delay > 0 ? "rgb(59, 130, 246)" : textColor} 
+                                                fontSize="0.22" 
+                                                textAnchor="middle"
+                                            >
+                                                {delayText}
+                                            </text>
+                                        </g>
+                                    );
+                                })}
+                            </g>
+                        );
+                    })}
+                </svg>
+                
+                <div className={`grid grid-cols-2 gap-4 p-4 ${cardBg} rounded-lg border ${cardBorder}`}>
+                    <div className="space-y-1">
+                        <p className={`text-xs ${cardTextPrimary}`}>Numero Stack</p>
+                        <p className={`text-xl font-bold ${cardTextValue}`}>{positions.length}</p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className={`text-xs ${cardTextPrimary}`}>Moduli per Stack</p>
+                        <p className={`text-xl font-bold ${isDarkTheme ? 'text-purple-400' : 'text-purple-600'}`}>{positions[0]?.modules?.length || 0}</p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className={`text-xs ${cardTextPrimary}`}>Spacing Orizzontale</p>
+                        <p className={`text-xl font-bold ${isDarkTheme ? 'text-blue-400' : 'text-blue-600'}`}>
+                            {positions.length > 1 
+                                ? `${(positions[1].x - positions[0].x).toFixed(2)} m` 
+                                : 'N/A'}
+                        </p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className={`text-xs ${cardTextPrimary}`}>Profondità Sub</p>
+                        <p className={`text-xl font-bold ${isDarkTheme ? 'text-yellow-400' : 'text-yellow-600'}`}>{config.profondita_sub_cardioid || 60} cm</p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className={`text-xs ${cardTextPrimary}`}>Delay Cardioide</p>
+                        <p className={`text-xl font-bold ${isDarkTheme ? 'text-red-400' : 'text-red-600'}`}>
+                            {positions[0]?.modules?.[0]?.delay 
+                                ? (config.unita_ritardo === "ms" 
+                                    ? `${positions[0].modules[0].delay.toFixed(1)} ms` 
+                                    : `${((positions[0].modules[0].delay / 1000) * 343).toFixed(2)} m`)
+                                : 'N/A'}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+    
+    const lineGroups = {};
+    positions.forEach(p => {
+        const yKey = p.y.toFixed(2);
+        if (!lineGroups[yKey]) lineGroups[yKey] = [];
+        lineGroups[yKey].push(p);
+    });
+    
+    const sortedLines = Object.keys(lineGroups).sort((a, b) => parseFloat(a) - parseFloat(b));
+    
+    let longitudinalSpacing = 0;
+    if (sortedLines.length > 0) {
+        const firstLine = lineGroups[sortedLines[0]].sort((a, b) => a.x - b.x);
+        if (firstLine.length > 1) {
+            longitudinalSpacing = firstLine[1].x - firstLine[0].x;
+        }
+    }
+    
+    let depthSpacing = 0;
+    if (sortedLines.length > 1) {
+        const line1Y = parseFloat(sortedLines[0]);
+        const line2Y = parseFloat(sortedLines[1]);
+        depthSpacing = line2Y - line1Y;
+    }
+    
+    const newPositions = [];
+    sortedLines.forEach((yKey, lineIdx) => {
+        const lineSubs = lineGroups[yKey].sort((a, b) => a.x - b.x);
+        lineSubs.forEach((sub, subIdx) => {
+            newPositions.push({
+                ...sub,
+                displayX: subIdx * fixedSpacing,
+                displayY: lineIdx * lineSpacing,
+                lineLabel: `L${lineIdx + 1}`
+            });
+        });
+    });
+    
+    const maxDisplayX = Math.max(...newPositions.map(p => p.displayX));
+    const maxDisplayY = Math.max(...newPositions.map(p => p.displayY));
+    const minDisplayY = Math.min(...newPositions.map(p => p.displayY));
+    
+    const viewWidth = maxDisplayX + padding * 2;
+    const viewHeight = maxDisplayY - minDisplayY + 0.5 + padding;
+    
+    const viewBoxMinX = -padding;
+    const viewBoxMinY = minDisplayY - 0.5;
+
+    const delays = positions.map(p => p.delay);
+    const minDelay = Math.min(...delays);
+    const maxDelay = Math.max(...delays);
+
+    return (
+        <div className="w-full space-y-4">
+            <svg 
+                viewBox={`${viewBoxMinX} ${viewBoxMinY} ${viewWidth} ${viewHeight}`} 
+                className="w-full"
+                style={{ height: '500px' }}
+                preserveAspectRatio="xMidYMid meet"
+            >
+                <defs>
+                    <pattern id="grid" width="0.5" height="0.5" patternUnits="userSpaceOnUse">
+                        <path d="M 0.5 0 L 0 0 0 0.5" fill="none" stroke={lineColor} strokeWidth="0.01"/>
+                    </pattern>
+                </defs>
+                <rect x={viewBoxMinX} y={viewBoxMinY} width={viewWidth} height={viewHeight} fill="url(#grid)" />
+
+                {newPositions.map((sub) => {
+                    const isMinDelay = sub.delay === minDelay;
+                    const isMaxDelay = sub.delay === maxDelay;
+                    const boxColor = isMinDelay ? "rgb(59, 130, 246)" : isMaxDelay ? "rgb(239, 68, 68)" : "rgb(100, 116, 139)";
+                    
+                    return (
+                        <g key={sub.id}>
+                            {sub.displayX === 0 && (
+                                <text 
+                                    x={-0.4} 
+                                    y={sub.displayY} 
+                                    fill={textColor}
+                                    fontSize="0.35" 
+                                    fontWeight="bold"
+                                    textAnchor="end"
+                                    dominantBaseline="middle"
+                                >
+                                    {sub.lineLabel}
+                                </text>
+                            )}
+                            
+                            <circle 
+                                cx={sub.displayX} 
+                                cy={sub.displayY} 
+                                r={subSize / 2} 
+                                fill={boxColor}
+                                stroke={textColor}
+                                strokeWidth="0.04"
+                            />
+                            
+                            <text 
+                                x={sub.displayX} 
+                                y={sub.displayY + 0.55} 
+                                fill={textColor}
+                                fontSize="0.3" 
+                                fontWeight="bold"
+                                textAnchor="middle"
+                            >
+                                {sub.id}
+                            </text>
+                            
+                            <text 
+                                x={sub.displayX} 
+                                y={sub.displayY + 0.85} 
+                                fill={textColor}
+                                fontSize="0.25" 
+                                textAnchor="middle"
+                            >
+                                {config.unita_ritardo === "ms" 
+                                    ? `${sub.delay.toFixed(1)}ms` 
+                                    : `${((sub.delay / 1000) * 343).toFixed(2)}m`}
+                            </text>
+                            
+                            {sub.polarity === -1 && (
+                                <circle 
+                                    cx={sub.displayX + subSize/3} 
+                                    cy={sub.displayY - subSize/3} 
+                                    r="0.12" 
+                                    fill="red" 
+                                    stroke={textColor}
+                                    strokeWidth="0.03" 
+                                />
+                            )}
+                        </g>
+                    );
+                })}
+            </svg>
+            
+            <div className={`grid grid-cols-2 gap-4 p-4 ${cardBg} rounded-lg border ${cardBorder}`}>
+                {longitudinalSpacing > 0 && (
+                    <div className="space-y-1">
+                        <p className={`text-xs ${cardTextPrimary}`}>Spacing Longitudinale</p>
+                        <p className={`text-xl font-bold ${cardTextValue}`}>{longitudinalSpacing.toFixed(2)} m</p>
+                    </div>
+                )}
+                {depthSpacing > 0 && (
+                    <div className="space-y-1">
+                        <p className={`text-xs ${cardTextPrimary}`}>Profondità tra Linee</p>
+                        <p className={`text-xl font-bold ${isDarkTheme ? 'text-red-400' : 'text-red-600'}`}>{depthSpacing.toFixed(2)} m</p>
+                    </div>
+                )}
+                <div className="space-y-1">
+                    <p className={`text-xs ${cardTextPrimary}`}>Ritardo Minimo</p>
+                    <p className={`text-xl font-bold ${isDarkTheme ? 'text-blue-400' : 'text-blue-600'}`}>
+                        {config.unita_ritardo === "ms" ? `${minDelay.toFixed(1)} ms` : `${((minDelay / 1000) * 343).toFixed(2)} m`}
+                    </p>
+                </div>
+                <div className="space-y-1">
+                    <p className={`text-xs ${cardTextPrimary}`}>Ritardo Massimo</p>
+                    <p className={`text-xl font-bold ${isDarkTheme ? 'text-red-400' : 'text-red-600'}`}>
+                        {config.unita_ritardo === "ms" ? `${maxDelay.toFixed(1)} ms` : `${((maxDelay / 1000) * 343).toFixed(2)} m`}
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+}

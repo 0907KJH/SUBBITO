@@ -1,0 +1,51 @@
+﻿[
+    {
+        "Url":  "https://subbito.base44.app/manifest.json",
+        "SavedTo":  ".\\tools\\live_assets\\subbito.base44.app\\\\manifest.json",
+        "Status":  "OK",
+        "LocalPath":  "C:\\Users\\LUCA\\Desktop\\SUBBITO\\subbito.base44.app\\\\manifest.json",
+        "Compare":  "LOCAL_MISSING"
+    },
+    {
+        "Url":  "https://subbito.base44.app/static/css/main.72898d88.css",
+        "SavedTo":  ".\\tools\\live_assets\\subbito.base44.app\\\\static\\\\css\\\\main.72898d88.css",
+        "Status":  "OK",
+        "LocalPath":  "C:\\Users\\LUCA\\Desktop\\SUBBITO\\subbito.base44.app\\\\static\\\\css\\\\main.72898d88.css",
+        "Compare":  "LOCAL_MISSING"
+    },
+    {
+        "Url":  "https://subbito.base44.app/static/js/main.71ddac5b.js",
+        "SavedTo":  ".\\tools\\live_assets\\subbito.base44.app\\\\static\\\\js\\\\main.71ddac5b.js",
+        "Status":  "OK",
+        "LocalPath":  "C:\\Users\\LUCA\\Desktop\\SUBBITO\\subbito.base44.app\\\\static\\\\js\\\\main.71ddac5b.js",
+        "Compare":  "LOCAL_MISSING"
+    },
+    {
+        "Url":  "https://cdn.tailwindcss.com",
+        "SavedTo":  ".\\tools\\live_assets\\cdn.tailwindcss.com",
+        "Status":  "OK",
+        "LocalPath":  "C:\\Users\\LUCA\\Desktop\\SUBBITO\\cdn.tailwindcss.com",
+        "Compare":  "LOCAL_MISSING"
+    },
+    {
+        "Url":  "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68f604bd612eae3193ebad6e/1453d5a16_logo.png",
+        "SavedTo":  ".\\tools\\live_assets\\qtrypzzcjebvfcihiynt.supabase.co\\\\storage\\\\v1\\\\object\\\\public\\\\base44-prod\\\\public\\\\68f604bd612eae3193ebad6e\\\\1453d5a16_logo.png",
+        "Status":  "OK",
+        "LocalPath":  "C:\\Users\\LUCA\\Desktop\\SUBBITO\\qtrypzzcjebvfcihiynt.supabase.co\\\\storage\\\\v1\\\\object\\\\public\\\\base44-prod\\\\public\\\\68f604bd612eae3193ebad6e\\\\1453d5a16_logo.png",
+        "Compare":  "LOCAL_MISSING"
+    },
+    {
+        "Url":  "https://subbito.base44.app/static/css/vendors.77bf307e.css",
+        "SavedTo":  ".\\tools\\live_assets\\subbito.base44.app\\\\static\\\\css\\\\vendors.77bf307e.css",
+        "Status":  "OK",
+        "LocalPath":  "C:\\Users\\LUCA\\Desktop\\SUBBITO\\subbito.base44.app\\\\static\\\\css\\\\vendors.77bf307e.css",
+        "Compare":  "LOCAL_MISSING"
+    },
+    {
+        "Url":  "https://subbito.base44.app/static/js/vendors.4784dbb1.js",
+        "SavedTo":  ".\\tools\\live_assets\\subbito.base44.app\\\\static\\\\js\\\\vendors.4784dbb1.js",
+        "Status":  "OK",
+        "LocalPath":  "C:\\Users\\LUCA\\Desktop\\SUBBITO\\subbito.base44.app\\\\static\\\\js\\\\vendors.4784dbb1.js",
+        "Compare":  "LOCAL_MISSING"
+    }
+]

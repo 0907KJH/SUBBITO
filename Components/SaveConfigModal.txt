@@ -1,0 +1,117 @@
+import React, { useState } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Cloud, HardDrive } from 'lucide-react';
+
+export default function SaveConfigModal({ isOpen, onClose, onSave }) {
+  const [configName, setConfigName] = useState('');
+  const [saveLocation, setSaveLocation] = useState('cloud'); // 'cloud' o 'local'
+
+  const handleSaveClick = () => {
+    if (configName.trim() === '') {
+      alert('Il nome della configurazione non può essere vuoto.');
+      return;
+    }
+    onSave(configName, saveLocation);
+    setConfigName('');
+    setSaveLocation('cloud');
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[500px] bg-slate-800 text-white border-slate-700">
+        <DialogHeader>
+          <DialogTitle className="text-white text-xl">Salva Configurazione</DialogTitle>
+          <DialogDescription className="text-slate-400">
+            Dai un nome alla tua configurazione e scegli dove salvarla.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-6 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="configName" className="text-slate-300">
+              Nome Configurazione
+            </Label>
+            <Input
+              id="configName"
+              value={configName}
+              onChange={(e) => setConfigName(e.target.value)}
+              placeholder="Es: Setup Arena 2024"
+              className="bg-slate-900/50 border-slate-600 text-white placeholder:text-slate-500"
+            />
+          </div>
+          
+          <div className="grid gap-3">
+            <Label className="text-slate-300">Dove salvare?</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSaveLocation('cloud')}
+                className={`flex flex-col items-center gap-2 py-6 transition-all ${
+                  saveLocation === 'cloud'
+                    ? 'bg-blue-600 text-white border-blue-500 hover:bg-blue-700'
+                    : 'bg-slate-900/50 border-slate-600 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                <Cloud className="w-6 h-6" />
+                <div className="text-center">
+                  <div className="font-semibold text-sm">Cloud</div>
+                  <div className="text-xs opacity-80">Serve internet</div>
+                </div>
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSaveLocation('local')}
+                className={`flex flex-col items-center gap-2 py-6 transition-all ${
+                  saveLocation === 'local'
+                    ? 'bg-green-600 text-white border-green-500 hover:bg-green-700'
+                    : 'bg-slate-900/50 border-slate-600 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                <HardDrive className="w-6 h-6" />
+                <div className="text-center">
+                  <div className="font-semibold text-sm">Dispositivo</div>
+                  <div className="text-xs opacity-80">Funziona offline</div>
+                </div>
+              </Button>
+            </div>
+            
+            <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-3">
+              <p className="text-xs text-slate-400">
+                {saveLocation === 'cloud' 
+                  ? '☁️ Cloud: Accessibile da tutti i tuoi dispositivi, richiede connessione internet.'
+                  : '💾 Dispositivo: Salvato solo su questo dispositivo e browser, funziona offline.'}
+              </p>
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button 
+            variant="outline" 
+            onClick={onClose} 
+            className="bg-slate-900/50 border-slate-600 text-slate-300 hover:bg-slate-700"
+          >
+            Annulla
+          </Button>
+          <Button 
+            onClick={handleSaveClick} 
+            className={saveLocation === 'cloud' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}
+          >
+            Salva
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

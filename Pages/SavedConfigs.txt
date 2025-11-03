@@ -1,0 +1,251 @@
+
+import React, { useState } from "react";
+import { base44 } from "@/api/base44Client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Trash2, Radio, Maximize2, Settings, Cloud, HardDrive, Play } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { format } from "date-fns";
+import { it } from "date-fns/locale";
+import { getLocalConfigs, deleteLocalConfig } from "@/components/localStorageConfig";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useTheme } from "@/components/ThemeContext";
+
+export default function SavedConfigs() {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("all");
+  const { isDarkTheme, bgMain, bgCard, borderCard, textPrimary, textSecondary } = useTheme();
+
+  const { data: cloudConfigs, isLoading: isLoadingCloud } = useQuery({
+    queryKey: ['configs'],
+    queryFn: () => base44.entities.SubwooferConfig.list("-created_date"),
+    initialData: [],
+  });
+
+  const [localConfigs, setLocalConfigs] = useState(getLocalConfigs());
+
+  React.useEffect(() => {
+    const handleStorageChange = () => {
+      setLocalConfigs(getLocalConfigs());
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  const deleteCloudConfigMutation = useMutation({
+    mutationFn: (id) => base44.entities.SubwooferConfig.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['configs'] });
+    },
+  });
+
+  const handleDeleteLocal = (configId) => {
+    const result = deleteLocalConfig(configId);
+    if (result.success) {
+      setLocalConfigs(getLocalConfigs());
+    } else {
+      alert(`Errore nell'eliminazione: ${result.error}`);
+    }
+  };
+
+  const handleLoadConfig = (config) => {
+    navigate(createPageUrl('Home'), { state: { config } });
+  };
+
+  const getSetupLabel = (setup) => {
+    const labels = {
+      endfire: "Endfire",
+      gradient: "Gradient",
+      stack_cardioid: "Stack Cardioid",
+      arc: "Arc",
+      nessuno: "Nessuno"
+    };
+    return labels[setup] || setup;
+  };
+
+  const allConfigs = [
+    ...cloudConfigs.map(c => ({ ...c, isLocal: false })),
+    ...localConfigs.map(c => ({ ...c, isLocal: true }))
+  ].sort((a, b) => new Date(b.created_date) - new Date(a.created_date));
+
+  const filteredConfigs = activeTab === "all" 
+    ? allConfigs 
+    : activeTab === "cloud" 
+      ? allConfigs.filter(c => !c.isLocal)
+      : allConfigs.filter(c => c.isLocal);
+
+  const isLoading = isLoadingCloud;
+
+  const ConfigCard = ({ config }) => (
+    <Card 
+      className={`${bgCard} backdrop-blur-xl ${borderCard} hover:border-blue-500/50 transition-all duration-300 group`}
+    >
+      <CardHeader>
+        <div className="flex justify-between items-start">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <CardTitle className={textPrimary}>
+                {config.nome_configurazione}
+              </CardTitle>
+              {config.isLocal ? (
+                <Badge className="bg-green-600 text-white text-xs flex items-center gap-1">
+                  <HardDrive className="w-3 h-3" />
+                  Locale
+                </Badge>
+              ) : (
+                <Badge className="bg-blue-600 text-white text-xs flex items-center gap-1">
+                  <Cloud className="w-3 h-3" />
+                  Cloud
+                </Badge>
+              )}
+            </div>
+            <p className={`text-xs ${textSecondary}`}>
+              {format(new Date(config.created_date), "d MMMM yyyy", { locale: it })}
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => config.isLocal ? handleDeleteLocal(config.id) : deleteCloudConfigMutation.mutate(config.id)}
+            className={`${textSecondary} hover:text-red-400 hover:bg-red-500/10`}
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <p className={`text-xs ${textSecondary}`}>Subwoofer</p>
+            <Badge className="bg-blue-600 text-white">
+              {config.numero_subwoofer}x {config.taglio}
+            </Badge>
+          </div>
+          <div className="space-y-1">
+            <p className={`text-xs ${textSecondary}`}>Crossover</p>
+            <Badge className="bg-purple-600 text-white">
+              {config.frequenza_crossover} Hz
+            </Badge>
+          </div>
+        </div>
+
+        <div className={`space-y-2 pt-2 border-t ${isDarkTheme ? 'border-slate-700' : 'border-gray-300'}`}>
+          <div className="flex items-center gap-2">
+            <Radio className="w-4 h-4 text-blue-400" />
+            <span className={`text-sm ${textSecondary}`}>
+              {getSetupLabel(config.setup_primario)}
+              {config.setup_secondario !== "nessuno" && 
+                ` + ${getSetupLabel(config.setup_secondario)}`}
+            </span>
+          </div>
+
+          {config.setup_primario === "stack_cardioid" && (
+            <div className="flex items-center gap-2">
+              <span className={`text-xs ${textSecondary}`}>
+                Stack: {config.numero_stack_cardioid} moduli
+              </span>
+            </div>
+          )}
+
+          {(config.setup_primario === "arc" || config.setup_secondario === "arc") && (
+            <div className="flex items-center gap-2">
+              <span className={`text-xs ${textSecondary}`}>
+                Arc: {config.gradi_arc}°
+              </span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <Maximize2 className="w-4 h-4 text-green-400" />
+            <span className={`text-sm ${textSecondary}`}>
+              {config.larghezza_massima} metri
+            </span>
+          </div>
+        </div>
+
+        {config.note && (
+          <div className={`pt-2 border-t ${isDarkTheme ? 'border-slate-700' : 'border-gray-300'}`}>
+            <p className={`text-xs ${textSecondary} line-clamp-2`}>
+              {config.note}
+            </p>
+          </div>
+        )}
+
+        <Button
+          onClick={() => handleLoadConfig(config)}
+          className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white mt-2"
+        >
+          <Play className="w-4 h-4 mr-2" />
+          Carica Configurazione
+        </Button>
+      </CardContent>
+    </Card>
+  );
+
+  return (
+    <div className={`min-h-screen ${bgMain} p-6`}>
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-8">
+          <h1 className={`text-4xl font-bold ${textPrimary} mb-2`}>Configurazioni Salvate</h1>
+          <p className={textSecondary}>Gestisci le tue configurazioni di posizionamento</p>
+        </div>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
+          <TabsList className={`${isDarkTheme ? 'bg-slate-800/50 border-slate-700' : 'bg-gray-200 border-gray-300'} border`}>
+            <TabsTrigger value="all" className={isDarkTheme ? 'data-[state=active]:bg-slate-700' : 'data-[state=active]:bg-white'}>
+              Tutte ({allConfigs.length})
+            </TabsTrigger>
+            <TabsTrigger value="cloud" className="data-[state=active]:bg-blue-600">
+              <Cloud className="w-4 h-4 mr-2" />
+              Cloud ({cloudConfigs.length})
+            </TabsTrigger>
+            <TabsTrigger value="local" className="data-[state=active]:bg-green-600">
+              <HardDrive className="w-4 h-4 mr-2" />
+              Locale ({localConfigs.length})
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {isLoading ? (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Array(6).fill(0).map((_, i) => (
+              <Card key={i} className={`${bgCard} ${borderCard}`}>
+                <CardHeader>
+                  <Skeleton className={`h-6 w-3/4 ${isDarkTheme ? 'bg-slate-700' : 'bg-gray-300'}`} />
+                  <Skeleton className={`h-4 w-1/2 ${isDarkTheme ? 'bg-slate-700' : 'bg-gray-300'}`} />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className={`h-20 w-full ${isDarkTheme ? 'bg-slate-700' : 'bg-gray-300'}`} />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : filteredConfigs.length === 0 ? (
+          <Card className={`${bgCard} backdrop-blur-xl ${borderCard}`}>
+            <CardContent className="p-12 text-center">
+              <Settings className={`w-16 h-16 ${textSecondary} mx-auto mb-4`} />
+              <h3 className={`text-xl font-semibold ${textPrimary} mb-2`}>
+                Nessuna Configurazione {activeTab === "cloud" ? "Cloud" : activeTab === "local" ? "Locale" : ""}
+              </h3>
+              <p className={textSecondary}>
+                Crea la tua prima configurazione dalla pagina principale
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredConfigs.map((config) => (
+              <ConfigCard key={config.id} config={config} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

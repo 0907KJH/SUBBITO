@@ -1,0 +1,340 @@
+
+import React, { useMemo } from 'react';
+
+export default function AcousticHeatmap({ positions, config, frequency, arcAngle }) {
+  const SPEED_OF_SOUND = 343;
+  const wavelength = SPEED_OF_SOUND / frequency;
+  
+  const subDimensions = {
+    '12"': 0.40,
+    '15"': 0.50,
+    '18"': 0.60,
+    '21"': 0.75,
+    '24"': 0.90
+  };
+  
+  const subPhysicalDimension = subDimensions[config?.taglio] || 0.60;
+  
+  const subPositions = useMemo(() => {
+    if (!positions || positions.length === 0 || !config) return [];
+    
+    const subs = [];
+    const isStackCardioid = config.setup_primario === 'stack_cardioid';
+    const hasArc = config.setup_primario === 'arc' || config.setup_secondario === 'arc';
+    
+    if (isStackCardioid && positions.length > 0 && positions[0].modules) {
+      const DV = (parseFloat(config.profondita_sub_cardioid) / 100) || subPhysicalDimension;
+      
+      // Per stack cardioid, OGNI MODULO è una sorgente separata per la fisica
+      positions.forEach(stack => {
+        if (stack.modules && Array.isArray(stack.modules)) {
+          stack.modules.forEach((module, moduleIdx) => {
+            // Calcola posizione Y corretta per ogni modulo
+            let moduleY;
+            if (module.fisicamente_invertito) {
+              // Modulo 1: girato verso palco (Y negativa rispetto allo stack)
+              moduleY = stack.y - DV;
+            } else {
+              // Moduli 2, 3...: dritti, impilati
+              // Il modulo 2 è a Y=stack.y, modulo 3 a Y=stack.y+DV, etc.
+              const frontModuleIndex = moduleIdx - 1; // -1 perché il primo è quello girato
+              moduleY = stack.y + (frontModuleIndex * DV);
+            }
+            
+            // Delay base del modulo (cardioid delay per il modulo girato)
+            const baseDelay = module.delay || 0;
+            
+            subs.push({
+              x: stack.x,
+              y: moduleY,
+              baseDelay: baseDelay,
+              delay: baseDelay, // Verrà aggiornato con Arc se necessario
+              polarity: module.polarity || 1, // Polarità elettrica
+              stackX: stack.x, // Per calcolo Arc
+              isStackModule: true
+            });
+          });
+        }
+      });
+    } else {
+      positions.forEach(p => {
+        if (p && typeof p.x === 'number' && typeof p.y === 'number') {
+          const baseDelay = p.arcDelay !== undefined 
+            ? (p.delay - p.arcDelay)
+            : p.delay;
+          
+          subs.push({
+            x: p.x,
+            y: p.y,
+            baseDelay: baseDelay,
+            delay: baseDelay,
+            polarity: p.polarity || 1
+          });
+        }
+      });
+    }
+    
+    // Se c'è Arc e arcAngle è definito, ricalcola i delay Arc
+    if (hasArc && arcAngle !== undefined && subs.length > 0) {
+      // Raggruppa per X (ogni X unico è uno stack)
+      const uniqueX = [...new Set(subs.map(s => s.x))];
+      const minX = Math.min(...uniqueX);
+      const maxX = Math.max(...uniqueX);
+      const arcWidth = maxX - minX;
+      const centerX = (minX + maxX) / 2;
+      
+      const angleRad = (arcAngle * Math.PI) / 180;
+      let radius;
+      if (arcAngle === 0) {
+        radius = Infinity;
+      } else {
+        radius = arcWidth / (2 * Math.sin(angleRad / 2));
+        if (isNaN(radius) || !isFinite(radius)) {
+          radius = arcWidth / (angleRad || 0.0001);
+        }
+      }
+      
+      // Calcola delay Arc per ogni X unica
+      const arcDelayByX = {};
+      let minDistanceFromFocus = Infinity;
+      
+      uniqueX.forEach(x => {
+        const relX = x - centerX;
+        let distanceFromFocus = 0;
+        if (arcAngle === 0) {
+          distanceFromFocus = 0;
+        } else if (isFinite(radius)) {
+          distanceFromFocus = Math.sqrt(Math.pow(relX, 2) + Math.pow(radius, 2));
+        }
+        arcDelayByX[x] = distanceFromFocus;
+        minDistanceFromFocus = Math.min(minDistanceFromFocus, distanceFromFocus);
+      });
+      
+      // Applica delay Arc a tutti i moduli dello stesso stack (stessa X)
+      subs.forEach(sub => {
+        let arcDelay = 0;
+        if (arcAngle !== 0 && isFinite(radius)) {
+          arcDelay = ((arcDelayByX[sub.x] - minDistanceFromFocus) / SPEED_OF_SOUND) * 1000;
+        }
+        arcDelay = Math.max(0, arcDelay);
+        
+        // Delay totale = delay base + delay Arc
+        sub.delay = sub.baseDelay + arcDelay;
+      });
+    }
+    
+    return subs;
+  }, [positions, config, subPhysicalDimension, arcAngle]);
+
+  const bounds = useMemo(() => {
+    if (subPositions.length === 0) {
+      // Bordi di default ragionevoli per uno stato vuoto o senza sub
+      return { minX: -10, maxX: 10, minY: -5, maxY: 15 };
+    }
+    
+    const xs = subPositions.map(s => s.x);
+    const ys = subPositions.map(s => s.y);
+    
+    const minSubX = Math.min(...xs);
+    const maxSubX = Math.max(...xs);
+    const minSubY = Math.min(...ys);
+    const maxSubY = Math.max(...ys);
+
+    // Padding verticale ridotto per una visualizzazione più compatta
+    const verticalPaddingTop = 1.5;
+    const verticalPaddingBottom = 4.0;
+    
+    const effectiveMinY = minSubY - verticalPaddingTop;
+    const effectiveMaxY = maxSubY + verticalPaddingBottom;
+    const effectiveViewHeight = effectiveMaxY - effectiveMinY;
+
+    // Rapporto d'aspetto più contenuto (1.0 = quadrato, valori più bassi = più alto che largo)
+    const targetAspectRatio = 0.8;
+
+    let desiredViewWidth = effectiveViewHeight * targetAspectRatio;
+
+    // Assicurati che sia largo abbastanza per i sub + padding
+    const minRequiredWidth = (maxSubX - minSubX) + 2.0;
+    desiredViewWidth = Math.max(desiredViewWidth, minRequiredWidth);
+
+    // Centra orizzontalmente
+    const centerX = (minSubX + maxSubX) / 2;
+    const effectiveMinX = centerX - desiredViewWidth / 2;
+    const effectiveMaxX = centerX + desiredViewWidth / 2;
+
+    return {
+      minX: effectiveMinX,
+      maxX: effectiveMaxX,
+      minY: effectiveMinY,
+      maxY: effectiveMaxY
+    };
+  }, [subPositions]);
+
+  const gridSize = 100;
+  const heatmapData = useMemo(() => {
+    if (subPositions.length === 0) return [];
+    
+    const data = [];
+    const { minX, maxX, minY, maxY } = bounds;
+    const stepX = (maxX - minX) / gridSize;
+    const stepY = (maxY - minY) / gridSize;
+    
+    let maxSPL = -Infinity;
+    let minSPL = Infinity;
+    
+    for (let row = 0; row < gridSize; row++) {
+      const rowData = [];
+      for (let col = 0; col < gridSize; col++) {
+        const x = minX + col * stepX;
+        const y = minY + row * stepY;
+        
+        let realPart = 0;
+        let imagPart = 0;
+        
+        // Ogni modulo contribuisce individualmente alla simulazione
+        subPositions.forEach(sub => {
+          const distance = Math.sqrt(Math.pow(x - sub.x, 2) + Math.pow(y - sub.y, 2));
+          const amplitude = 1 / (distance + 0.1);
+          
+          const delayDistance = (sub.delay / 1000) * SPEED_OF_SOUND;
+          const effectiveDistance = distance + delayDistance;
+          const totalPhase = (2 * Math.PI * effectiveDistance) / wavelength;
+          
+          // La polarità elettrica (-1 o +1) inverte la fase
+          realPart += sub.polarity * amplitude * Math.cos(totalPhase);
+          imagPart += sub.polarity * amplitude * Math.sin(totalPhase);
+        });
+        
+        const magnitude = Math.sqrt(realPart * realPart + imagPart * imagPart);
+        const spl = 20 * Math.log10(magnitude + 0.001);
+        
+        maxSPL = Math.max(maxSPL, spl);
+        minSPL = Math.min(minSPL, spl);
+        
+        rowData.push({ x, y, spl });
+      }
+      data.push(rowData);
+    }
+    
+    const range = maxSPL - minSPL || 1;
+    data.forEach(row => {
+      row.forEach(cell => {
+        cell.normalizedSPL = (cell.spl - minSPL) / range;
+      });
+    });
+    
+    return data;
+  }, [subPositions, bounds, wavelength]);
+
+  if (!positions || positions.length === 0 || !config) {
+    return (
+      <div className="w-full h-96 flex items-center justify-center text-slate-400">
+        <p>Nessun dato disponibile</p>
+      </div>
+    );
+  }
+
+  if (subPositions.length === 0) {
+    return (
+      <div className="w-full h-96 flex items-center justify-center text-slate-400">
+        <p>Nessun subwoofer valido trovato</p>
+      </div>
+    );
+  }
+
+  const getSPLColor = (normalizedSPL) => {
+    const clampedSPL = Math.max(0, Math.min(1, normalizedSPL));
+    
+    if (clampedSPL < 0.2) return `hsl(240, 100%, ${30 + clampedSPL * 100}%)`;
+    if (clampedSPL < 0.4) return `hsl(180, 100%, ${40 + clampedSPL * 50}%)`;
+    if (clampedSPL < 0.6) return `hsl(60, 100%, ${45 + clampedSPL * 30}%)`;
+    if (clampedSPL < 0.8) return `hsl(30, 100%, ${50 + clampedSPL * 20}%)`;
+    return `hsl(0, 100%, ${40 + clampedSPL * 20}%)`;
+  };
+
+  const { minX, maxX, minY, maxY } = bounds;
+  const viewWidth = maxX - minX;
+  const viewHeight = maxY - minY;
+  
+  const cellWidth = viewWidth / gridSize;
+  const cellHeight = viewHeight / gridSize;
+  
+  // Per visualizzare i marker: mostra solo gli stack (X uniche) per cardioid
+  const isStackCardioid = config.setup_primario === 'stack_cardioid';
+  const visualMarkers = isStackCardioid 
+    ? positions.map((stack, idx) => ({
+        x: stack.x,
+        y: stack.y,
+        id: idx + 1
+      }))
+    : subPositions.map((sub, idx) => ({
+        x: sub.x,
+        y: sub.y,
+        id: idx + 1
+      }));
+
+  return (
+    <svg 
+      viewBox={`${minX} ${minY} ${viewWidth} ${viewHeight}`}
+      className="w-full h-full"
+      preserveAspectRatio="xMidYMid meet"
+    >
+      {/* Heatmap */}
+      {heatmapData.map((row, rowIdx) => (
+        <g key={rowIdx}>
+          {row.map((cell, colIdx) => (
+            <rect
+              key={colIdx}
+              x={cell.x}
+              y={cell.y}
+              width={cellWidth}
+              height={cellHeight}
+              fill={getSPLColor(cell.normalizedSPL)}
+              opacity={0.85}
+            />
+          ))}
+        </g>
+      ))}
+      
+      {/* Linea Y=0 */}
+      <line x1={minX} y1={0} x2={maxX} y2={0} stroke="rgba(255,255,255,0.3)" strokeWidth="0.03" strokeDasharray="0.15 0.15" />
+      
+      {/* Markers visivi (solo stack per cardioid) */}
+      {visualMarkers.map((marker, idx) => (
+        <g key={idx}>
+          <circle 
+            cx={marker.x} 
+            cy={marker.y} 
+            r={0.2} 
+            fill="white"
+            stroke="black"
+            strokeWidth="0.04"
+          />
+          <text 
+            x={marker.x} 
+            y={marker.y + 0.06} 
+            fill="black" 
+            fontSize="0.18" 
+            fontWeight="bold"
+            textAnchor="middle"
+          >
+            {marker.id}
+          </text>
+        </g>
+      ))}
+      
+      {/* Labels */}
+      <text 
+        x={(minX + maxX) / 2} 
+        y={minY + 0.5} 
+        fill="white" 
+        fontSize="0.5" 
+        fontWeight="bold"
+        textAnchor="middle"
+      >
+        STAGE
+      </text>
+      
+      <text 
+        x={(minX + maxX) / 2} 
+ 

@@ -1,0 +1,315 @@
+SUBBITO — DOCUMENTO DI PASSAGGIO (HANDOVER)
+Data: 2 Nov 2025
+
+Questo file è la “singola fonte di verità” per chi prende in mano il progetto.
+Contiene, in forma sintetica ma completa:
+- calcoli acustici (modelli, formule, assunzioni e varianti);
+- visualizzazioni (heatmap, schemi Overview/Report) e coordinate;
+- funzionamento dell’app (UI/UX, salvataggio/apertura, tema, mobile);
+- struttura dei file e delle dipendenze rilevanti;
+- suggerimenti di test/diagnostica.
+
+======================================================================
+1) MODELLO ACUSTICO E CALCOLI IMPLEMENTATI
+======================================================================
+
+Costanti e unità
+- Velocità del suono (c): 343 m/s.
+- Unità di ritardo predefinita: millisecondi (ms).* 
+  *L’UI permette di mostrare opzionalmente i valori in metri, ma i calcoli avvengono in ms.
+
+Dimensioni fisiche (larghezza/“impronta” del cabinet)
+- Mappatura pollici → metri (lato lungo utile per spacing fisico minimo):
+  12" = 0.40 m, 15" = 0.50 m, 18" = 0.60 m, 21" = 0.75 m, 24" = 0.90 m.
+
+Lunghezza d’onda e spaziatura acustica
+- λ = c / f (dove f è la frequenza di riferimento).
+- Spaziatura acustica ottimale orizzontale: λ/4.
+- Tutte le spaziature orizzontali sono limitate sia da λ/4 sia dalla larghezza massima disponibile impostata in UI; mai minori della dimensione fisica del cabinet per evitare compenetrazioni.
+
+Coordinate e convenzioni spaziali
+- Asse X: orizzontale (sinistra-destra palco). 0 al centro del cluster.
+- Asse Y: verticale “schermo” (alto-basso). Convenzione fissa:
+  STAGE in alto → Y negativo; AUDIENCE in basso → Y positivo.
+
+Polarità e fase
+- Polarità elettrica: +1 (normale), -1 (invertita).
+- Fase complessiva per una sorgente in un punto (x,y):
+  φ = k·r + ω·τ, con k = 2π/λ, r = distanza punto-sorgente, ω = 2πf, τ = ritardo elettronico (s).
+- Nota importante: l’uso di +ω·τ garantisce coerenza fra Gradient e Stack Cardioid ed evita il “ribaltamento” dei lobi. È stato oggetto di una correzione.
+
+Output calcoli (struttura base)
+- title: descrizione del setup calcolato.
+- positions: array di sorgenti con {x, y, delay, polarity, label, …}.
+- dimensions: { width, depth } dell’array fisico risultante.
+- summary: elenco stringhe riassuntive dei parametri chiave.
+- delayTable: (quando rilevante) tabella ritardi per interfaccia/Report.
+- notes: avvisi su limiti fisici, sovrapposizioni, scelte forzate.
+
+Setup implementati
+------------------
+1. Endfire (N linee)
+   - Input chiave: numero di linee (≥2), larghezza massima, frequenza di crossover, “frequenza target di cancellazione”.
+   - Spaziatura in profondità (tra linee): d = (c / f_target) / 4.
+   - Ritardo tra linee: Δt = (d / c)·1000 ms.
+   - Spaziatura orizzontale tra sub per linea: min(λ/4, spazio disponibile), ma ≥ dimensione fisica cabinet.
+   - Posizioni:
+     • X: da -W/2 a +W/2 con step = spaziatura orizzontale.
+     • Y: lineIdx * d.
+     • Delay: lineIdx * Δt.
+     • Polarità: +1.
+
+   Variante Endfire + Arc:
+   - Dopo aver posizionato l’endfire, si calcolano ritardi Arc per ogni “colonna” (stesso X) e si sommano al ritardo endfire (vedi Arc più sotto).
+
+2. Gradient (2 linee, coppie F/R)
+   - Input chiave: distanza fisica tra i coni (Front–Rear) in cm; frequenza di crossover; larghezza massima.
+   - Distanza fisica d_fisico = input_cm / 100.
+   - Ritardo F→R: Δt_FR = (d_fisico / c)·1000 ms (sempre sulla distanza fisica tra coni, non sulla profondità dei cabinet).
+   - Spaziatura “profondità” per geometria: depthSpacing = d_fisico + profondità fisica cabinet (per il disegno, NON per il ritardo).
+   - Copie/coppie: numPairs = floor(N_sub / 2). Ogni coppia genera due elementi:
+     • L1 (vicino palco): y = -d_fisico, polarity = -1, delay = Δt_FR.
+     • L2 (verso pubblico): y = 0, polarity = +1, delay = 0.
+   - X posizionato come per Endfire, con spaziatura orizzontale limitata da λ/4, spazio e dimensione cabinet.
+
+   Variante Gradient + Arc:
+   - Calcolate le coppie F/R, l’Arc aggiunge ritardi per colonna (X) che si sommano al delay di base; le viste e la tabella ritardi mostrano separatamente le componenti quando utile.
+
+3. Stack Cardioid (moduli per stack)
+   - Input chiave: #moduli per stack (≥2), profondità fisica del sub (cm), larghezza massima.
+   - Per ogni stack:
+     • Modulo 1: fisicamente invertito (guarda il palco), polarità -1, ritardo τ_cardioid = (DV / c)·1000 ms con DV = profondità (m).
+     • Moduli successivi: frontali, polarità +1, ritardo 0. Sono impilati “in avanti” lungo Y (verso audience) a passi DV per la rappresentazione fisica, ma il ritardo elettronico resta quello sopra.
+   - Spaziatura orizzontale tra stack: min(λ/4, spazio disponibile), ≥ dimensione fisica cabinet.
+   - L’attenuazione posteriore stimata cresce con i moduli (linea guida informativa nelle summary).
+
+   Variante Stack Cardioid + Arc:
+   - L’Arc calcola ritardi per ogni stack (X unico) e li somma al ritardo cardioide dei singoli moduli; l’UI mostra i moduli come sorgenti singole per il modello.
+
+4. Arc Elettronico (solo Arc)
+   - Angolo desiderato: θ (0°–270°).
+   - Numero di sorgenti: di default usa tutti i sub.
+   - Spaziatura orizzontale: min(λ/4, spazio disponibile), ≥ dimensione cabinet.
+   - Larghezza effettiva: W = (N-1)·spaziatura.
+   - Raggio dell’arco (approssimazione di curvatura elettronica):
+     • θ_rad = θ·π/180.
+     • Se θ=0 → r = ∞.
+     • Altrimenti r = W / [2·sin(θ_rad/2)]. In fallback numerico: r = W / θ_rad.
+   - Per ogni colonna (X): distanza dal “fuoco” ≈ √(x² + r²); si sottrae la minima distanza per ottenere Δd; ritardo Arc = (Δd / c)·1000 ms.
+
+5. L - R (nuovo setup primario)
+   - Scopo: due stack/cluster laterali a sinistra e destra del palco.
+   - Vincoli: numero di sub PARI; si ignora il vincolo acustico λ/4 per la larghezza totale (si usa la larghezza reale impostata).
+   - Posizionamento:
+     • Coordinate X fisse ai lati: x = ± (larghezza_massima / 2). Tutti i moduli di un lato condividono la stessa X.
+     • Coordinate Y: 0 (vista dall’alto, nessun avanzamento verso il pubblico per evitare bias front/back in predizione).
+     • Delay: 0 per tutti i moduli; Polarity: +1.
+   - Dimensioni risultanti: width = larghezza_massima; depth = 0.
+   - Rappresentazione:
+     • Overview/Report: due rettangoli ruotati di 90° etichettati “L × N” e “R × N”; indicatore distanza centrale con valore reale in metri; etichette STAGE (in alto) e AUDIENCE (in basso). La label “STAGE” è stata alzata per non sovrapporsi alla misura della distanza.
+     • Predizione (Heatmap): marker rettangolari L/R ruotati di 90°; stessi punti fisici delle sorgenti.
+
+Correzioni implementate (importanti)
+------------------------------------
+1) Gradient ribaltato: uniformata la fase a φ = k·r + ω·τ per tutte le sorgenti → cancellazione corretta lato STAGE (L1 invertito) e lobo verso AUDIENCE.
+2) Arc doppio-conteggio nel renderer: in modalità Arc-only, il renderer tratta i delay calcolati come “solo Arc” e ricalcola dinamicamente l’Arc (baseDelay = 0). Nelle modalità combinate (Endfire/Gradient/Stack + Arc) l’Arc viene sommato sottraendo l’eventuale arcDelay già presente (baseDelay = delay - arcDelay).
+3) L - R: introdotti rettangoli ruotati in Prediction/Overview; in Overview spostata la label STAGE verso l’alto per evitare sovrapposizione con l’indicatore distanza.
+
+======================================================================
+2) VISUALIZZAZIONE E PREDIZIONE (AcousticHeatmap)
+======================================================================
+
+File: src/components/AcousticHeatmap.jsx
+
+Input e preparazione sorgenti
+- Accetta: positions (dal calcolo), config, frequency (slider), arcAngle (slider/eventi).
+- Converte le posizioni in un elenco di “sorgenti fisiche”:
+  • Setup normali: ogni position → una sorgente con {x,y, baseDelay, polarity}.
+  • Stack Cardioid: ogni modulo diventa una sorgente separata. Il modulo fisicamente invertito è posto a y-DV; i frontali a y+ n·DV per la resa spaziale; delay di base = cardioide del modulo.
+  • Se presente l’Arc, il componente ricalcola i ritardi Arc dalle X uniche con l’angolo corrente e li somma al baseDelay (regole Arc-only/Arc-combinato come sopra).
+
+Equazione di campo e somma complessa
+- Per ogni cella della griglia (default 100×100):
+  • Distanza r da ogni sorgente; ampiezza ~ 1/(r+0.1) (evita singolarità).
+  • Fase totale: φ = k·r + ω·τ, con k = 2π/λ; τ = delay_tot(ms)/1000.
+  • Somma complessa: Re += polarity·A·cos φ; Im += polarity·A·sin φ.
+  • |P| = √(Re²+Im²); SPL(dB) ~ 20·log10(|P| + ε).
+  • Normalizzazione min–max sulla griglia per mappatura colore.
+
+Coordinate e bounding box
+- STAGE in alto (Y negativo), AUDIENCE in basso (Y positivo). Mostra la linea Y=0.
+- Bounds calcolati dai marker dei sub + padding verticale/orizzontale, con aspect ratio controllato.
+- Colori heatmap: da blu→ciano→giallo→arancio→rosso con opacità 0.85.
+
+Marker e labels
+• L - R: due rettangoli per lato (marker L/R), ruotati 90°.
+- Marker bianchi sui punti sorgente:
+  • Per Stack si mostrano i marker degli stack (colonne) per non affollare; in altri setup i marker sono i singoli sub.
+- Etichette STAGE/AUDIENCE ai bordi.
+
+Aggiornamenti dinamici
+- Slider frequenza in Prediction: aggiorna λ e ricalcola la somma.
+- Slider angolo Arc: ricalcola i ritardi Arc nel renderer per anteprima immediata.
+- Eventi personalizzati: “subbito-arc-angle-changed” per sincronizzare Home/Overview/Prediction.
+
+======================================================================
+3) FUNZIONAMENTO DELL’APP (FLUSSO, UI, STORAGE)
+======================================================================
+
+Pagine principali
+- Home (src/pages/Home.jsx)
+  • Parametri base: numero sub, taglio, crossover (titolo centrato), larghezza massima (campo spostato sotto “Frequenza di Crossover”), unità ritardo, note.
+  • Setup Primario: Endfire, Gradient, Arc, Stack Cardioid, L - R.
+  • Setup Secondario: +Arc (se il primario non è Arc).
+  • Box verdi “contestuali” con il controllo che li genera inscritto al loro interno:
+    – Endfire: include il select “Setup Primario”, Frequenza target cancellazione (slider + input) e Numero di linee.
+    – Gradient: include il select “Setup Primario” e Distanza fisica tra griglie (slider + input) con indicatori λ/4 e λ/2.
+    – Stack Cardioid: include il select “Setup Primario”, Sub per Stack e Profondità Sub (cm).
+    – Arc secondario: include il select “Setup Secondario” e l’angolo Arc (slider + input).
+  • Ordine rendering: box del Primario → (eventuale) select Secondario → (se attivo) box verde del Secondario.
+  • Validazioni: divisibilità Endfire, pari per Gradient, PARI obbligatorio per L - R, range Arc [0°,270°], limiti fisici λ/2, ecc.
+  • Calcolo: invoca calculateSubwooferSetup; salva in sessionStorage: 
+    – 'subbito_results' = { config, results }
+    – 'subbito_calculation_done' = 'true'
+  • Navigazione post-calcolo: auto-redirect a Overview.
+
+- Prediction (src/pages/Prediction.jsx)
+  • Recupera config/results da location.state oppure da sessionStorage.
+  • Slider per frequenza; slider per Arc se attivo; invia eventi di sincronizzazione.
+  • Mostra AcousticHeatmap con markers e legenda semplificata.
+
+- Overview / Report
+  • Overview usa EnhancedSetupVisualizer; in L - R mostra due rettangoli ruotati e l’indicatore di distanza reale. La label “STAGE” è stata alzata per non sovrapporsi alla misura.
+  • Report include lo stesso schema (ridotto) e una tabella ritardi; sotto la tabella è stata ripristinata la sezione “spaziatura” con fallback N/D; label mappata per mostrare “L - R”.
+  • Riassumono parametri, tabelle ritardi e note; (non dettagliati qui poiché invariati a livello di logica di calcolo).
+
+Tema e stile
+• Theme toggle su desktop e mobile (sole/luna) via ThemeContext.
+• Mobile: top bar fissa a icone; il contenuto è spinto in basso (pt-14). In Home appare il brand “SUBBITO” grande sotto la barra.
+• Sidebar: dopo RESET appare “SUBBITO” grande (maiuscolo, bold); evidenziazione rotta attiva case-insensitive.
+• UI cleaning: rimossa la legenda SPL e il sotto-titolo “Arc Elettronico 90”.
+- ThemeContext con temi chiaro/scuro (bgMain, bgCard, bgInput, textPrimary/Secondary, ecc.).
+- Box “popup” uniformati in verde con label/testi/slider coerenti.
+
+Storage ed eventi
+- sessionStorage: persistenza temporanea di config e risultati; sincronizzazione con eventi custom.
+- Apertura/Salvataggio (File System Access API):
+  • APRI: apre sempre lo “scelta cartella”; se è stata già concessa una cartella, viene proposta di default; i file .json vengono listati e possono essere caricati (scrive la config in sessionStorage e invalida i risultati).
+  • SALVA: chiede/ricorda cartella scrivibile (permesso readwrite); nome file richiesto da modal; scrittura JSON prettificata; ultimo percorso ricordato in IndexedDB.
+  • Memoria percorso: src/utils/dirHandleStore.js (IndexedDB) e src/utils/fsAccess.js per permessi e IO.
+
+======================================================================
+4) DETTAGLI DI IMPLEMENTAZIONE (PUNTI CHIAVE)
+======================================================================
+
+File principali
+- src/utils/acousticCalculations.js → logica di posizionamento/ritardi per Endfire, Gradient, Stack Cardioid, Arc e combinazioni.
+- src/components/AcousticHeatmap.jsx → simulazione e rendering mappa SPL.
+- src/pages/Home.jsx → UI parametri, box verdi, validazioni, calcolo, storage e routing post-calcolo.
+- src/pages/Prediction.jsx → slider frequenza/Arc, heatmap, sincronizzazione.
+
+Scelte e note
+- L - R ignora il limite λ/4 per la larghezza: si usa sempre la larghezza reale impostata (larghezza_massima). I moduli per lato sono N/2, richiesto N pari.
+- EnhancedSetupVisualizer (Overview/Report):
+  • Stack Cardioid: cerchi per stack + pannello dettagli per moduli (ritardi, invertito fisico “GIRATO”, ecc.).
+  • L - R: solo due rettangoli ruotati (niente cerchi per singoli moduli), linea centrale tratteggiata, indicatore distanza, label STAGE/AUDIENCE.
+  • Altri setup: raggruppamento per linee L1/L2… con cerchi e delay per sorgente.
+- Numerazione etichette: per multi-linea l’ordinamento è per linee e per indice; nelle coppie Gradient: L1 (rear, palco), L2 (front, audience).
+- Dimensioni array: width/depth calcolate dalle spaziature risultanti.
+- Avvisi automatici: quando la spaziatura fisica minima forza valori > λ/4 o quando la larghezza non consente gli spazi ideali.
+
+Correzioni recenti rilevanti
+- Fase con +ω·τ uniformata (risolve ribaltamento Gradient).
+- Arc-only: evitato doppio conteggio dei ritardi Arc nel renderer (baseDelay=0; ricalcolo locale coerente con slider).
+- UI Home: 
+  • Box verdi uniformi per tutti i popup condizionali;
+  • Select “Setup Primario” inscritto dentro i box di Endfire/Gradient/Stack;
+  • Select “Setup Secondario” posizionato sempre dopo il box primario; 
+  • Box “Arc secondario” con select inscritto e controlli all’interno.
+
+======================================================================
+5) ESECUZIONE E VERIFICA
+======================================================================
+
+Sviluppo locale
+- Avvio dev server: npm run dev (Vite). Porta tipica: 5173.
+
+Verifiche rapide consigliate
+- L - R: con N pari (es. 10 sub) e larghezza 15 m, Overview deve mostrare 2 rettangoli ruotati con indicatore “15.00 m”; in Predizione compaiono due marker rettangolari e la mappa simmetrica front/back.
+- Gradient (4–6 sub, 60–90 Hz): cancellazione lato STAGE (in alto), lobo verso AUDIENCE.
+- Arc-only (6–8 sub, 80–100 Hz): copertura che si allarga con l’angolo; ritardi maggiori ai bordi.
+- Endfire 2 linee + Arc: l’Arc deve aggiungere l’effetto “curvatura” sull’array endfire.
+- Stack Cardioid: modulo rear invertito con ritardo DV/c; attenuazione posteriore percepibile.
+
+======================================================================
+6) PROSSIMI PASSI (SUGGERIMENTI FACOLTATIVI)
+======================================================================
+
+- Piccola legenda testuale in Home per spiegare che i box verdi sono contestuali al setup selezionato.
+- Snapshot visivi/minitest per 4 preset (Gradient, Arc-only 60°, Endfire+Arc, L - R) per prevenire regressioni.
+- Test automatici sui vincoli (pari/divisibilità, range Arc, limiti λ/2) e su path SALVA/APRI (permessi negati/consentiti, cartella vuota, conflitti di nome).
+
+======================================================================
+7) CONTATTI E NOTE FINALI
+======================================================================
+
+Il progetto è pronto per essere proseguito in una nuova chat. Questo documento funge da guida completa alle logiche di calcolo e alla visualizzazione. Eventuali approfondimenti numerici (es. confronto con figure EV specifiche) possono essere aggiunti nel Report con piccole estensioni della summary/delayTable.
+
+PASSAGGIO DI CONSEGNA — Stato aggiornato
+Data: 2025-11-02
+Percorso progetto: C:\\Users\\LUCA\\Desktop\\SUBBITO
+
+NOTA IMPORTANTE: questo documento fotografa lo stato esatto al termine della chat precedente. Eventuali modifiche successive locali NON sono incluse qui e non devono essere considerate parte di questo stato.
+
+1) Stato funzionale attuale
+• Visualizzazione
+  – Stack Cardioid: bollino rosso dell’inversione elettrica sul cerchio grigio; dettaglio moduli con “GIRATO” se fisicamente invertiti.
+  – L - R: due rettangoli ruotati, distanza reale visualizzata; label STAGE alzata per non sovrapporsi alla misura.
+• Predizione (Prediction)
+  – AcousticHeatmap.jsx integra il ricalcolo dinamico dell’Arc e i marker rettangolari in L - R.
+• Calcoli (utils/acousticCalculations.js)
+  – Fix Gradient (ritardo su distanza tra coni); combinazioni Primario+Arc; nuovo ramo L - R.
+• Navigazione e stato
+  – Menu a pulsanti (HOME, OVERVIEW, PREDIZIONE, REPORT, APRI, SALVA, RESET, TEMA) con top bar mobile fissa.
+  – Pulsanti Overview/Predizione/Report abilitati dopo “CALCOLA”.
+  – Brand “SUBBITO” sotto RESET (desktop) e in Home su mobile.
+• Home
+  – Unico pulsante “CALCOLA”. Titolo centrato; “Larghezza Massima” spostata sotto “Frequenza di Crossover”.
+  – Aggiunto Primario “L - R” con vincolo N sub pari.
+• APRI/SALVA (File System Access API)
+  – APRI chiede sempre la cartella (preseleziona l’ultima). Elenca i .json; caricamento riscrive la config corrente.
+  – SALVA ricorda la cartella, richiede permesso readwrite e salva JSON formattato.
+  – Persistenza del percorso in IndexedDB (dirHandleStore).
+
+2) File chiave modificati (ultimo stato)
+- src/Layout.jsx: menu a pulsanti, abilitazione condizionata post-CALCOLA, etichetta "APRI".
+- src/pages/Home.jsx: validazioni; unico pulsante CALCOLA; centro acustico reinserito; messaggi di errore/successo; salvataggio risultati in sessionStorage.
+- src/pages/Prediction.jsx: import AcousticHeatmap; legge config/results anche da sessionStorage; slider frequenza e Arc.
+- src/pages/Overview.jsx: legge config/results anche da sessionStorage.
+- src/components/AcousticHeatmap.jsx: calcolo interferenza; aggiornamento dinamico Arc nello slider; supporto Stack Cardioid per modulo; rettangoli L/R in L - R.
+- src/components/EnhancedSetupVisualizer.jsx: ramo dedicato per L - R (rettangoli ruotati, indicatore distanza, label STAGE/AUDIENCE; STAGE alzato per evitare overlap).
+- src/utils/acousticCalculations.js: fix delay Gradient; implementazione combinazioni Primario+Arc; delay table ampliata.
+
+3) Dati persistiti
+- sessionStorage
+  • 'subbito_calculation_done' = 'true' dopo CALCOLA.
+  • 'subbito_results' = JSON.stringify({ config, results }).
+
+4) Cose da sapere / Assunzioni
+- Il layout a pulsanti potrebbe non coincidere esteticamente al 100% con lo screenshot originario, ma replica il comportamento richiesto: tasti grigi finché non si calcola, poi blu.
+- L’heatmap ricalcola l’Arc in modo dinamico (solo per visualizzazione); i risultati di calcolo di acousticCalculations includono comunque i delay Arc quando il setup secondario è "arc".
+- Le pagine funzionano anche dopo refresh grazie a sessionStorage.
+
+5) Prossimi passi consigliati per la nuova chat
+- A) Allineare stile visivo dei pulsanti laterali (padding, icone, font) se serve corrispondenza 1:1 con il mock.
+- B) Aggiungere test rapidi (unit/integration) per convalidare i vincoli delle validazioni (endfire/gradi/stack/arc) con casi esempio.
+- C) (Opzionale) Persistenza su localStorage o backend delle ultime configurazioni.
+- D) Rifinitura AcousticHeatmap: legenda colori, toggle per mostrare markers per stack vs singoli sub.
+
+6) Come riprodurre
+- Apri Home → compila parametri → premi CALCOLA.
+- Verifica che i tasti OVERVIEW/PREDIZIONE/REPORT si abilitino.
+- Vai su Predizione → muovi slider FREQUENZA/ARC → heatmap si aggiorna.
+- Vai su Overview/Report → contenuti caricati dai risultati salvati.
+
+Fine passaggio.

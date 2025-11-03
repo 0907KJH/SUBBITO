@@ -1,0 +1,88 @@
+SPIEGAZIONE COMPLETA - SUBBITO (Vite + React + Tailwind)
+
+Questo documento spiega in modo sintetico ma completo le logiche di calcolo, le scelte geometriche, i vincoli e la resa grafica del progetto. È pensato per il passaggio a un'altra AI o sviluppatore.
+
+1) Tecnologie e struttura
+- Stack: Vite + React 18, Tailwind CSS, React Router.
+- Pagine principali: Home (input/validazioni), Overview (schema setup), Prediction (mappa acustica), Report (tabella ritardi + note), SavedConfigs (apri configurazioni).
+- Componenti chiave: EnhancedSetupVisualizer (schema SVG), AcousticHeatmap (fisica/heatmap), ThemeContext (tema), UI (shadcn-like).
+- Utilities: acousticCalculations.js (tutte le geometrie/delay), fsAccess.js (File System Access API), dirHandleStore.js (IndexedDB per handle), utils/index.js.
+
+2) Convenzioni geometriche
+- Assi: X orizzontale (negativo = L, positivo = R); Y verticale (negativo verso STAGE, 0 vicino al pubblico). La "L1" può indicare la linea più vicina al palco in gradient/endfire.
+- L-R: L a X = -width/2, R a X = +width/2. La larghezza (es. 15 m) è reale per Prediction; in Overview è una rappresentazione scalata via viewBox (non altera la fisica).
+- PAN fisico: L ruota di +α, R di −α attorno a un pivot della rispettiva colonna. I rettangoli ruotano; i testi restano orizzontali (contro-rotazione) per leggibilità.
+
+3) Setups e regole
+A) L-R semplice (setup_primario = 'l_r', setup_secondario = 'nessuno')
+- Posizioni: tutti i sub L condividono X = -width/2; tutti i sub R X = +width/2. L'ordinamento visuale e di Report elenca prima tutti gli L dallo STAGE all'AUDIENCE, poi gli R.
+- Delay: 0 ms salvo ulteriori moduli secondari.
+
+B) L-R + Gradient (setup_secondario = 'gradient')
+- Coppie per lato: FRONT (verso audience, yFront = 0), REAR (verso palco, yRear = -d_fisico). Regola fisica: FRONT delay = 0 ms; REAR inverso (polarity = -1) con delay = d_fisico/c (in ms), dove c ≈ 343 m/s.
+- Vincolo: massimo una coppia per lato (4 sub in totale). Se arrivano più sub, si considera solo la prima coppia per lato e si emette nota in results.notes.
+
+C) L-R + Endfire (setup_secondario = 'endfire')
+- Colonna per lato con passo d_opt ricavato dalla frequenza di crossover; progressione di delay crescente dalla base (o viceversa) a seconda della convenzione. Polarity normalmente positiva.
+
+D) L-R + Stack Cardioid (setup_secondario = 'stack_cardioid')
+- Moduli per lato: 2 o 3 tipici.
+- Geometria per lato: yOffsets = [0, -DV] con DV = profondità sub (m); per 3 moduli: [0, -DV, +DV] (distribuzione simmetrica per leggibilità).
+- Fisica: il modulo REAR (quello a y = -DV) è fisicamente girato (GIRATO) e ha polarity = -1 con delay DV/c (ms); gli altri moduli polarity = +1, delay = 0.
+- Report: la colonna NOTE mostra "GIRATO" quando fisicamente_invertito = true.
+
+Regola Centro Acustico (se attiva):
+- Offset a (m) dalla griglia al centro acustico del cono, inserito in Home come "Offset Centro Acustico (cm)".
+- Per Stack Cardioid (anche in L-R + Stack Cardioid):
+	• Distanza effettiva tra i coni DV_eff = DV − 2a → delay cardioide = DV_eff / c (clippato a ≥ 0)
+	• Posizioni: modulo front-facing traslato di −a (verso STAGE), modulo girato traslato di +a (verso AUDIENCE) lungo Y
+- Gradient ed Endfire: invariati perché i calcoli usano già la distanza tra i coni (d_fisico) o non dipendono da DV.
+
+E) Gradient semplice (setup_primario = 'gradient')
+- L1 (rear, verso palco) invertita con delay d_fisico/c; L2 (front) normale 0 ms. Con Arc elettronico si somma un arcDelay a ciascun elemento di pari indice.
+
+F) Stack Cardioid semplice (setup_primario = 'stack_cardioid')
+- Calcolo come in D), ma raggruppato in "stack"; ogni modulo è una riga nella delayTable, con delayBase e delayArc se presente Arc secondario.
+ - Se Centro Acustico è attivo: si applicano DV_eff e shift ±a come indicato sopra; viene aggiunta una nota di riepilogo con DV_eff.
+
+G) Arc elettronico (setup_secondario = 'arc')
+- Per N sorgenti disposte su una retta, calcolo del raggio/ritardi per approssimare un arco di apertura α. Ritardi assegnati per indice. In L-R + Arc si applica per linea oppure per stack a seconda del primario.
+
+4) Prediction (AcousticHeatmap)
+- Usa posizioni fisiche Reali (metri). Ogni sub è sorgente con: coordinate (x,y), polarity (+1/-1), delay totale (base + arc, ms), frequenza di lavoro (crossover). Si calcola campo complesso e SPL su griglia; mappa mostrata in SVG.
+- La distanza L-R usata qui è reale (es. 15 m), indipendente dalla scala grafica in Overview.
+
+5) Overview (EnhancedSetupVisualizer)
+- Rappresentazione SVG scalata. Unica linea orizzontale in alto collega L e R al primo livello di profondità (vicino allo STAGE). La misura (es. "15 mt") è scritta sotto la linea per non sovrapporsi a "STAGE".
+- Etichette L/R non-Stack esterne: per L a destra del sub, per R a sinistra; contro-rotazione dei testi per mantenerli orizzontali durante PAN.
+- Stack Cardioid: rettangoli ruotano, ma le liste (etichette/delay) sono fisse rispetto al PAN; per lato vengono visualizzati i moduli con indicazione di polarity (pallino rosso se invertito) e ritardi.
+- STAGE posizionato più in alto; AUDIENCE abbassato per maggiore separazione visiva.
+
+6) Ordinamenti e numerazioni
+- L-R: in Overview e in Report, numerazione visuale aggregata: prima tutti gli L (dallo STAGE verso AUDIENCE), poi gli R. Esempio Stack Cardioid: L1 L2 L3, R4 R5 R6.
+- Gradient semplice: prima L1 (rear) poi L2 (front) per ogni coppia, poi Arc per indice.
+
+7) Validazioni principali (Home.jsx)
+- L-R + Gradient: obbligatoriamente 4 sub totali (2 coppie, una per lato). Se più sub, clamp a 4 e nota.
+- L-R + Stack Cardioid: num pari di sub (2 o 3 per lato tipico), DV richiesto (profondità fisica in cm).
+- Altre: divisibilità per endfire/stack, range parametri, suggerimenti.
+
+8) File System (Salva/Apri)
+- Salva: showSaveFilePicker (Explorer/Android picker) con memoria dell’ultimo percorso/nome; fallback download per browser non supportati (iOS Safari).
+- Apri: showOpenFilePicker con memoria dell’ultimo percorso; alternativa "Scegli cartella" (dove supportata) con indicizzazione .json.
+
+9) Unità e costanti
+- Velocità del suono c = 343 m/s (approssimata). Conversioni delay: ms ↔ m via d = c * (ms/1000).
+- Profondità fisica DV in metri: input in cm convertito in m. Distanze L-R in metri reali per Prediction.
+
+10) Note implementative
+- Tutti i ritardi totali di una sorgente sono somma di delay base (gradient/stack) e arcDelay (se presente).
+- In report, per Stack Cardioid, si riportano colonne delayBase e delayArc quando disponibili.
+- Le etichette esterne in Overview usano margini extra del viewBox per evitare tagli a PAN elevati.
+ - Centro Acustico: implementato in acousticCalculations.js (ritardi e coordinate Y per i moduli cardioidi) e rispecchiato in AcousticHeatmap.jsx (posizioni delle sorgenti fisiche).
+
+Per dettagli puntuali, vedere:
+- src/utils/acousticCalculations.js (logiche di calcolo e assembly risultati)
+- src/components/EnhancedSetupVisualizer.jsx (schema, etichette, PAN)
+- src/components/AcousticHeatmap.jsx (somma campi complessi e mappa SPL)
+- src/pages/Report.jsx (tabella ritardi/NOTE e ordinamenti)

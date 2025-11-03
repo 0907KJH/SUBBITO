@@ -1,0 +1,1799 @@
+
+import React, { useState, useEffect } from "react";
+import { base44 } from "@/api/base44Client";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useLocation } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Slider } from "@/components/ui/slider";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import {
+  Radio,
+  Settings,
+  Maximize2,
+  Calculator,
+  Save,
+  Check,
+  Info
+} from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useTheme } from "@/components/ThemeContext";
+
+export default function Home() {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [showSuccess, setShowSuccess] = useState(false);
+  
+  const { isDarkTheme, bgMain, bgCard, borderCard, bgInput, textPrimary, textSecondary, bgSection, bgSectionAlt, bgBadge } = useTheme();
+
+  const [config, setConfig] = useState({
+    numero_subwoofer: "",
+    taglio: '18"',
+    frequenza_crossover: 80,
+    frequenza_target_cancellazione: 80,
+    distanza_fisica_gradient: "",
+    setup_primario: "",
+    setup_secondario: "nessuno",
+    numero_linee: 2,
+    gradi_arc: 90,
+    numero_sub_arc: 4,
+    numero_stack_cardioid: 2,
+    profondita_sub_cardioid: "",
+    larghezza_massima: 15,
+    considera_centro_acustico: false,
+    offset_centro_acustico: 0,
+    unita_ritardo: "ms",
+    note: ""
+  });
+
+  useEffect(() => {
+    if (location.state?.config) {
+      const loadedConfig = location.state.config;
+      setConfig({
+        numero_subwoofer: parseInt(loadedConfig.numero_subwoofer) || 1,
+        taglio: loadedConfig.taglio || '18"',
+        frequenza_crossover: parseFloat(loadedConfig.frequenza_crossover) || 80,
+        frequenza_target_cancellazione: parseFloat(loadedConfig.frequenza_target_cancellazione) || 80,
+        distanza_fisica_gradient: loadedConfig.distanza_fisica_gradient || "",
+        setup_primario: loadedConfig.setup_primario || "",
+        setup_secondario: loadedConfig.setup_secondario || "nessuno",
+        numero_linee: parseFloat(loadedConfig.numero_linee) || 2,
+        gradi_arc: parseFloat(loadedConfig.gradi_arc) || 90,
+        numero_sub_arc: parseFloat(loadedConfig.numero_sub_arc) || 4,
+        numero_stack_cardioid: parseInt(loadedConfig.numero_stack_cardioid) || 2,
+        profondita_sub_cardioid: loadedConfig.profondita_sub_cardioid || "",
+        larghezza_massima: parseFloat(loadedConfig.larghezza_massima) || 15,
+        offset_centro_acustico: parseFloat(loadedConfig.offset_centro_acustico) || 0,
+        considera_centro_acustico: loadedConfig.considera_centro_acustico || false,
+        unita_ritardo: loadedConfig.unita_ritardo || "ms",
+        note: loadedConfig.note || ""
+      });
+    }
+  }, [location.state]);
+
+  const handleCalculate = () => {
+    if (!config.setup_primario) {
+      alert("Seleziona un setup principale prima di calcolare");
+      return;
+    }
+    
+    const numSubs = parseInt(config.numero_subwoofer);
+    if (isNaN(numSubs) || numSubs < 1) {
+      alert("Inserisci un numero valido di subwoofer (minimo 1)");
+      return;
+    }
+
+    if (config.setup_primario === 'stack_cardioid') {
+      const profSub = parseFloat(config.profondita_sub_cardioid);
+      if (isNaN(profSub) || profSub <= 0 || config.profondita_sub_cardioid === "") {
+        alert("Per lo Stack Cardioid, devi specificare la profondità fisica del sub in centimetri (valore obbligatorio, maggiore di 0).");
+        return;
+      }
+      if (numSubs % config.numero_stack_cardioid !== 0) {
+        alert(`Il numero totale di subwoofer (${numSubs}) deve essere divisibile per il numero di moduli per stack (${config.numero_stack_cardioid}).\n\nEsempio: Con ${config.numero_stack_cardioid} moduli per stack, usa ${Math.floor(numSubs / config.numero_stack_cardioid) * config.numero_stack_cardioid} o ${Math.ceil(numSubs / config.numero_stack_cardioid) * config.numero_stack_cardioid} sub totali.`);
+        return;
+      }
+      if (numSubs < config.numero_stack_cardioid) {
+        alert(`Per il setup Stack Cardioid con ${config.numero_stack_cardioid} moduli per stack, sono necessari almeno ${config.numero_stack_cardioid} subwoofer. Hai inserito solo ${numSubs} subwoofer totali.`);
+        return;
+      }
+    }
+
+    if (config.setup_primario === 'gradient') {
+      const distFisica = parseFloat(config.distanza_fisica_gradient);
+      if (isNaN(distFisica) || distFisica <= 0) {
+        alert("Per il setup Gradient, devi specificare la distanza fisica tra le griglie (un valore maggiore di 0 cm).");
+        return;
+      }
+      const safeFreq = config.frequenza_crossover > 0 ? config.frequenza_crossover : 80;
+      const maxDistCm = Math.round((343 / (safeFreq * 2)) * 100);
+      if (distFisica > maxDistCm) {
+        alert(`Per il setup Gradient, la distanza fisica tra le griglie (${distFisica} cm) non può superare λ/2 (${maxDistCm} cm) alla frequenza di crossover (${config.frequenza_crossover} Hz).`);
+        return;
+      }
+    }
+
+    if (config.setup_primario === 'endfire' && config.numero_linee < 2) {
+      alert(`Endfire richiede minimo 2 linee. Imposta almeno 2 linee per continuare.`);
+      return;
+    }
+
+    if (config.setup_primario === 'endfire') {
+      if (numSubs % config.numero_linee !== 0) {
+        alert(`Il numero di subwoofer (${numSubs}) deve essere divisibile per il numero di linee (${config.numero_linee}).\n\nOgni linea deve avere lo stesso numero di subwoofer.\n\nEsempio: ${numSubs} sub con ${Math.floor(numSubs / config.numero_linee)} o ${Math.ceil(numSubs / config.numero_linee)} linee.`);
+        return;
+      }
+    }
+
+    if (config.setup_primario === 'gradient' && numSubs % 2 !== 0) {
+      alert(`Gradient richiede un numero PARI di subwoofer.\n\nHai inserito ${numSubs} sub. Modifica il numero a ${numSubs - 1} o ${numSubs + 1}.`);
+      return;
+    }
+    
+    const SPEED_OF_SOUND = 343;
+    
+    const subDimensions = {
+      '12"': 0.40,
+      '15"': 0.50,
+      '18"': 0.60,
+      '21"': 0.75,
+      '24"': 0.90
+    };
+    
+    const subPhysicalDimension = subDimensions[config.taglio] || 0.60;
+    
+    const finalResults = {
+        title: "",
+        notes: [],
+        positions: [],
+        dimensions: { width: 0, depth: 0 },
+        summary: [],
+        delayTable: []
+    };
+    const { setup_primario, setup_secondario, frequenza_crossover, larghezza_massima, gradi_arc, numero_linee, frequenza_target_cancellazione } = config;
+    const numero_subwoofer = numSubs;
+
+    const wavelength = SPEED_OF_SOUND / frequenza_crossover;
+    const maxAcousticSpacing = wavelength / 4;
+    
+    const endfireWavelength = SPEED_OF_SOUND / config.frequenza_target_cancellazione;
+    const endfireOptimalSpacing = endfireWavelength / 4;
+    
+    const minPhysicalDimension = subPhysicalDimension;
+    
+    // Note: acousticOffset is currently declared but not used in subsequent calculations.
+    // If it were to be used for calculations expecting meters, it would need to be converted:
+    // const acousticOffset = config.considera_centro_acustico ? (config.offset_centro_acustico / 100) : 0;
+    const acousticOffset = config.considera_centro_acustico ? config.offset_centro_acustico : 0;
+
+
+    const calculateEndfire = (numSubs, freq, numLines) => {
+        const targetWavelength = SPEED_OF_SOUND / config.frequenza_target_cancellazione;
+        const optimalSpacing = targetWavelength / 4;
+        
+        const depthSpacing = optimalSpacing;
+        const depthDelay = (depthSpacing / SPEED_OF_SOUND) * 1000;
+        
+        const subsPerLine = Math.floor(numSubs / numLines);
+        
+        const availableSpacing = subsPerLine > 1 ? larghezza_massima / (subsPerLine - 1) : 0;
+        
+        let longitudinalSpacing = Math.min(availableSpacing, maxAcousticSpacing);
+        
+        if (longitudinalSpacing < minPhysicalDimension) {
+            longitudinalSpacing = minPhysicalDimension;
+            const neededWidth = (subsPerLine - 1) * minPhysicalDimension;
+            finalResults.notes.push(`⚠️ SOVRAPPOSIZIONE FISICA: Con sub ${config.taglio} (larghezza ${minPhysicalDimension.toFixed(2)}m), i ${subsPerLine} sub per linea necessitano di minimo ${neededWidth.toFixed(2)}m per evitare sovrapposizioni. Spazio disponibile: ${larghezza_massima.toFixed(2)}m.`);
+        }
+        
+        if (availableSpacing < maxAcousticSpacing && availableSpacing < minPhysicalDimension) {
+            finalResults.notes.push(`⚠️ SPAZIO LIMITATO: Spaziatura longitudinale di ${longitudinalSpacing.toFixed(2)}m utilizzata per rispettare la larghezza massima (${larghezza_massima.toFixed(2)}m) per ${subsPerLine} sub per linea. Idealmente sarebbe λ/4 (${maxAcousticSpacing.toFixed(2)}m).`);
+        } else if (longitudinalSpacing > maxAcousticSpacing && longitudinalSpacing === minPhysicalDimension) {
+            finalResults.notes.push(`⚠️ SPAZIATURA ECCESSIVA (forzata): La spaziatura minima fisica di ${longitudinalSpacing.toFixed(2)}m per i sub ${config.taglio} supera la spaziatura acustica ottimale λ/4 (${maxAcousticSpacing.toFixed(2)}m). Questo può ridurre il controllo del pattern.`);
+        }
+        
+        const gridToGridDepth = depthSpacing - subPhysicalDimension;
+        
+        const actualWidth = subsPerLine > 1 ? (subsPerLine - 1) * longitudinalSpacing : 0;
+        const actualDepth = (numLines - 1) * depthSpacing;
+
+        return { 
+            depthSpacing,
+            gridToGridDepth: Math.max(0, gridToGridDepth),
+            longitudinalSpacing,
+            depthDelay,
+            subsPerLine,
+            numLines,
+            depth: actualDepth,
+            width: actualWidth
+        };
+    };
+
+    const formatDelay = (delayMs) => {
+        if (config.unita_ritardo === "ms") {
+            return `${delayMs.toFixed(2)} ms`;
+        } else {
+            const delayMeters = (delayMs / 1000) * SPEED_OF_SOUND;
+            return `${delayMeters.toFixed(2)} m`;
+        }
+    };
+
+    const calculateGradient = (numSubs, freq) => {
+        const physicalSubDepth = subPhysicalDimension;
+        
+        let depthSpacing;
+        let d_fisico_actual;
+
+        const userProvidedPhysicalDistanceCm = parseFloat(config.distanza_fisica_gradient);
+
+        d_fisico_actual = userProvidedPhysicalDistanceCm / 100;
+        depthSpacing = d_fisico_actual + physicalSubDepth;
+        
+        const fr_delay = (depthSpacing / SPEED_OF_SOUND) * 1000;
+        
+        const numPairs = Math.floor(numSubs / 2);
+        const pairsPerLine = numPairs;
+        
+        const availableSpacing = pairsPerLine > 1 ? larghezza_massima / (pairsPerLine - 1) : 0;
+        
+        let longitudinalSpacing = Math.min(availableSpacing, maxAcousticSpacing);
+        
+        if (longitudinalSpacing < minPhysicalDimension) {
+            longitudinalSpacing = minPhysicalDimension;
+            const neededWidth = (pairsPerLine - 1) * minPhysicalDimension;
+            finalResults.notes.push(`⚠️ SOVRAPPOSIZIONE FISICA: Con sub ${config.taglio} (larghezza ${minPhysicalDimension.toFixed(2)}m), le ${pairsPerLine} coppie necessitano di minimo ${neededWidth.toFixed(2)}m per evitare sovrapposizioni. Spazio disponibile: ${larghezza_massima.toFixed(2)}m.`);
+        }
+        
+        if (availableSpacing < maxAcousticSpacing && availableSpacing < minPhysicalDimension) {
+            finalResults.notes.push(`⚠️ SPAZIO LIMITATO: Spaziatura longitudinale di ${longitudinalSpacing.toFixed(2)}m utilizzata per rispettare la larghezza massima (${larghezza_massima.toFixed(2)}m) per ${pairsPerLine} coppie. Idealmente sarebbe λ/4 (${maxAcousticSpacing.toFixed(2)}m).`);
+        } else if (longitudinalSpacing > maxAcousticSpacing && longitudinalSpacing === minPhysicalDimension) {
+            finalResults.notes.push(`⚠️ SPAZIATURA ECCESSIVA (forzata): La spaziatura minima fisica di ${longitudinalSpacing.toFixed(2)}m per i sub ${config.taglio} supera la spaziatura acustica ottimale λ/4 (${maxAcousticSpacing.toFixed(2)}m). Questo può ridurre il controllo del pattern.`);
+        }
+        
+        const actualWidth = pairsPerLine > 1 ? (pairsPerLine - 1) * longitudinalSpacing : 0;
+        const actualDepth = depthSpacing;
+
+        return { 
+            depthSpacing,
+            d_fisico: d_fisico_actual,
+            longitudinalSpacing,
+            fr_delay,
+            numPairs,
+            pairsPerLine,
+            numLines: 2,
+            depth: actualDepth,
+            width: actualWidth
+        };
+    };
+
+    const calculateStackCardioid = (totalSubs, numModulesPerStack, profondita_input, freq) => {
+        const DV = (parseFloat(profondita_input) / 100); // profondita_input is already validated to be a positive number
+        const delay_cardioid = (DV / SPEED_OF_SOUND) * 1000;
+        
+        const numStacks = Math.floor(totalSubs / numModulesPerStack);
+        
+        const availableSpacing = numStacks > 1 ? larghezza_massima / (numStacks - 1) : 0;
+        let horizontalSpacing = Math.min(availableSpacing, maxAcousticSpacing);
+        
+        if (horizontalSpacing < minPhysicalDimension && numStacks > 1) {
+            horizontalSpacing = minPhysicalDimension;
+            const neededWidth = (numStacks - 1) * minPhysicalDimension;
+            finalResults.notes.push(`⚠️ SOVRAPPOSIZIONE FISICA: Con sub ${config.taglio} (larghezza ${minPhysicalDimension.toFixed(2)}m), i ${numStacks} stack necessitano di minimo ${neededWidth.toFixed(2)}m per evitare sovrapposizioni. Spazio disponibile: ${larghezza_massima.toFixed(2)}m.`);
+        } else if (horizontalSpacing > maxAcousticSpacing && horizontalSpacing === minPhysicalDimension && numStacks > 1) {
+            finalResults.notes.push(`⚠️ SPAZIATURA ECCESSIVA (forzata): La spaziatura minima fisica di ${horizontalSpacing.toFixed(2)}m per i sub ${config.taglio} supera la spaziatura acustica ottimale λ/4 (${maxAcousticSpacing.toFixed(2)}m). Questo può ridurre il controllo del pattern orizzontale.`);
+        }
+        
+        const totalWidth = numStacks > 1 ? (numStacks - 1) * horizontalSpacing : 0;
+        
+        const positions = [];
+        let stackGlobalId = 1;
+
+        for (let stackIdx = 0; stackIdx < numStacks; stackIdx++) {
+            const stack_x = numStacks > 1 ? -totalWidth / 2 + stackIdx * horizontalSpacing : 0;
+            
+            const stackModules = [];
+            
+            for (let moduleIdx = 1; moduleIdx <= numModulesPerStack; moduleIdx++) {
+                const isPhysicallyInverted = moduleIdx === 1;
+                let polarity = 1;
+                if (moduleIdx === 1) {
+                    polarity = -1;
+                }
+                const delay = isPhysicallyInverted ? delay_cardioid : 0;
+                
+                stackModules.push({
+                    moduleIndex: moduleIdx,
+                    delay: delay,
+                    polarity: polarity,
+                    fisicamente_invertito: isPhysicallyInverted,
+                    arcDelay: 0
+                });
+            }
+            
+            positions.push({
+                id: stackGlobalId++,
+                stackIndex: stackIdx + 1,
+                x: stack_x,
+                y: 0,
+                modules: stackModules,
+                label: `S${stackIdx + 1}`
+            });
+        }
+        
+        const attenuazioneRetro = 6 + 6 * (numModulesPerStack - 2);
+        
+        return {
+            positions,
+            numStacks,
+            numModulesPerStack,
+            horizontalSpacing,
+            delay_cardioid,
+            attenuazioneRetro: Math.max(6, attenuazioneRetro),
+            depth: (numModulesPerStack - 1) * DV,
+            width: totalWidth + (numStacks > 0 ? subPhysicalDimension : 0),
+            DV: DV
+        };
+    };
+
+    const calculateElectronicArc = (numSubs, totalAngle, maxWidth) => {
+        if (numSubs < 2) {
+            return {
+                spacing: 0,
+                delays: numSubs === 1 ? [0] : [],
+                positions: numSubs === 1 ? [{ id: 1, x: 0, y: 0, delay: 0, polarity: 1, attenuazione: 0, label: '1' }] : [],
+                radius: Infinity,
+                maxDelay: 0,
+                actualWidth: 0
+            };
+        }
+
+        let spacing = 0;
+        if (numSubs > 1) {
+            const maxAllowedByWidth = maxWidth / (numSubs - 1);
+            let calculatedSpacing = Math.min(maxAcousticSpacing, maxAllowedByWidth);
+
+            if (calculatedSpacing < minPhysicalDimension) {
+                spacing = minPhysicalDimension;
+                const requiredWidth = (numSubs - 1) * minPhysicalDimension;
+                finalResults.notes.push(`⚠️ SOVRAPPOSIZIONE FISICA: Con sub ${config.taglio} (larghezza ${minPhysicalDimension.toFixed(2)}m), i ${numSubs} sub necessitano di minimo ${requiredWidth.toFixed(2)}m per evitare sovrapposizioni. Spazio disponibile: ${maxWidth.toFixed(2)}m.`);
+            } else {
+                spacing = calculatedSpacing;
+            }
+
+            if (spacing < maxAcousticSpacing && maxAllowedByWidth < maxAcousticSpacing) {
+                finalResults.notes.push(`⚠️ SPAZIO LIMITATO: Spaziatura longitudinale di ${spacing.toFixed(2)}m utilizzata per rispettare la larghezza massima (${maxWidth.toFixed(2)}m) per ${numSubs} sub. Idealmente sarebbe λ/4 (${maxAcousticSpacing.toFixed(2)}m).`);
+            } else if (spacing > maxAcousticSpacing && spacing === minPhysicalDimension) {
+                finalResults.notes.push(`⚠️ SPAZIATURA ECCESSIVA (forzata): La spaziatura minima fisica di ${spacing.toFixed(2)}m per i sub ${config.taglio} supera la spaziatura acustica ottimale λ/4 (${maxAcousticSpacing.toFixed(2)}m). Questo può ridurre il controllo del pattern.`);
+            }
+        }
+        
+        const actualWidth = (numSubs - 1) * spacing;
+        
+        const angleRad = (totalAngle * Math.PI) / 180;
+        let radius;
+        if (totalAngle === 0) {
+            radius = Infinity;
+        } else {
+            radius = actualWidth / (2 * Math.sin(angleRad / 2));
+            if (isNaN(radius) || !isFinite(radius)) {
+                radius = actualWidth / (angleRad || 0.0001);
+            }
+        }
+        
+        const delays = [];
+        const positions = [];
+        
+        let minDistanceFromFocus = Infinity;
+        const tempDistances = [];
+        
+        for (let i = 0; i < numSubs; i++) {
+            const x = -actualWidth / 2 + i * spacing;
+            let distanceFromFocus = 0;
+            
+            if (totalAngle === 0) {
+                distanceFromFocus = 0;
+            } else if (isFinite(radius)) {
+                distanceFromFocus = Math.sqrt(Math.pow(x, 2) + Math.pow(radius, 2));
+            }
+            
+            tempDistances.push({ x, distanceFromFocus });
+            minDistanceFromFocus = Math.min(minDistanceFromFocus, distanceFromFocus);
+        }
+        
+        tempDistances.forEach((item, i) => {
+            const delay = ((item.distanceFromFocus - minDistanceFromFocus) / SPEED_OF_SOUND) * 1000;
+            const final_delay = Math.max(0, delay);
+            
+            delays.push(final_delay);
+            positions.push({
+                id: i + 1,
+                x: item.x,
+                y: 0,
+                delay: final_delay,
+                polarity: 1,
+                attenuazione: 0,
+                label: `${i + 1}`
+            });
+        });
+        
+        const finalMaxDelay = numSubs > 0 ? Math.max(...delays) : 0;
+        
+        return { 
+            spacing, 
+            delays, 
+            positions, 
+            radius: isFinite(radius) ? radius : Infinity,
+            maxDelay: finalMaxDelay,
+            actualWidth
+        };
+    };
+
+    if (config.setup_primario === 'endfire' && config.setup_secondario === 'arc') {
+        if (numero_linee < 2) {
+            alert(`Endfire + Arc richiede minimo 2 linee.`);
+            return;
+        }
+
+        finalResults.title = `Endfire + Arc Elettronico`;
+
+        let primaryPositions = [];
+        let primaryCalc = calculateEndfire(numero_subwoofer, frequenza_crossover, numero_linee);
+            
+        let subGlobalId = 1;
+        for (let lineIdx = 0; lineIdx < primaryCalc.numLines; lineIdx++) {
+            const line_y = lineIdx * primaryCalc.depthSpacing;
+            const line_delay = lineIdx * primaryCalc.depthDelay;
+            
+            for (let subIdx = 0; subIdx < primaryCalc.subsPerLine; subIdx++) {
+                if (subGlobalId > numero_subwoofer) break;
+                
+                const sub_x = -primaryCalc.width / 2 + subIdx * primaryCalc.longitudinalSpacing;
+                
+                primaryPositions.push({
+                    id: subGlobalId++,
+                    x: sub_x,
+                    y: line_y,
+                    delay: line_delay,
+                    polarity: 1,
+                    attenuazione: 0,
+                    label: `${subGlobalId-1}`
+                });
+            }
+        }
+
+        finalResults.summary.push({ label: "Tipo Setup", value: "Endfire + Arc" });
+        finalResults.summary.push({ label: "Taglio Subwoofer", value: config.taglio });
+        finalResults.summary.push({ label: "Frequenza Target", value: `${config.frequenza_target_cancellazione} Hz` });
+        finalResults.summary.push({ label: "Numero Linee", value: `${primaryCalc.numLines}` });
+        finalResults.summary.push({ label: "Sub per Linea", value: `${primaryCalc.subsPerLine}` });
+        finalResults.summary.push({ label: "Profondità (centro acustico)", value: `${primaryCalc.depthSpacing.toFixed(2)} m` });
+        finalResults.summary.push({ label: "Profondità (griglia-griglia)", value: `${primaryCalc.gridToGridDepth.toFixed(2)} m` });
+        finalResults.summary.push({ label: "Ritardo tra Linee", value: formatDelay(primaryCalc.depthDelay) });
+
+        const xs = primaryPositions.map(p => p.x);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const arcWidth = maxX - minX;
+        const centerX = (minX + maxX) / 2;
+
+        const angleRad = (gradi_arc * Math.PI) / 180;
+        let radius;
+        if (gradi_arc === 0) {
+            radius = Infinity;
+        } else {
+            radius = arcWidth / (2 * Math.sin(angleRad / 2));
+            if (isNaN(radius) || !isFinite(radius)) {
+                radius = arcWidth / (angleRad || 0.0001);
+            }
+        }
+
+        let minDistanceFromFocusCombined = Infinity;
+        const tempCombinedDistances = primaryPositions.map(pos => {
+            const relX = pos.x - centerX;
+            let distanceFromFocus = 0;
+            if (gradi_arc === 0) {
+                distanceFromFocus = 0;
+            } else if (isFinite(radius)) {
+                distanceFromFocus = Math.sqrt(Math.pow(relX, 2) + Math.pow(radius, 2));
+            }
+            minDistanceFromFocusCombined = Math.min(minDistanceFromFocusCombined, distanceFromFocus);
+            return { pos, distanceFromFocus };
+        });
+
+        finalResults.positions = tempCombinedDistances.map(item => {
+            const relX = item.pos.x - centerX;
+            let arcDelay = 0;
+            
+            if (gradi_arc !== 0 && isFinite(radius)) {
+                arcDelay = ((item.distanceFromFocus - minDistanceFromFocusCombined) / SPEED_OF_SOUND) * 1000;
+            }
+            
+            arcDelay = Math.max(0, arcDelay);
+            
+            return {
+                ...item.pos,
+                delay: item.pos.delay + arcDelay,
+                arcDelay: arcDelay
+            };
+        });
+
+        finalResults.summary.push({ label: "Angolo Arc", value: `${gradi_arc} °` });
+        finalResults.summary.push({ label: "Ritardo Max Arc", value: formatDelay(Math.max(...finalResults.positions.map(p => p.arcDelay || 0))) });
+        if (isFinite(radius)) {
+            finalResults.summary.push({ label: "Raggio Arc Virtuale", value: `${radius.toFixed(2)} m` });
+        }
+
+        finalResults.delayTable = finalResults.positions.map(p => ({
+            sub: `${p.id} (L${Math.floor((p.id - 1) / primaryCalc.subsPerLine) + 1})`,
+            position: `Orizz: ${(primaryCalc.longitudinalSpacing * 100).toFixed(0)}cm / Prof: ${(primaryCalc.gridToGridDepth * 100).toFixed(0)}cm (griglia-griglia)`,
+            delay: `Linea: ${formatDelay(p.delay - (p.arcDelay || 0))} + Arc: ${formatDelay(p.arcDelay || 0)} = ${formatDelay(p.delay)}`,
+            polarity: p.polarity === -1 ? '⚠️ INVERTITA' : 'Normale',
+            attenuazione: p.attenuazione ? `${p.attenuazione} dB` : '0 dB'
+        }));
+
+        finalResults.notes.push(`Setup Endfire con ${numero_subwoofer} subwoofer ${config.taglio}.`);
+        finalResults.notes.push(`Disposti in ${primaryCalc.numLines} linee con ${primaryCalc.subsPerLine} sub per linea.`);
+        finalResults.notes.push(`Spaziatura longitudinale: ${primaryCalc.longitudinalSpacing.toFixed(2)}m.`);
+        finalResults.notes.push(`Ritardo progressivo tra linee: ${formatDelay(primaryCalc.depthDelay)}.`);
+        finalResults.notes.push(`Applicare INOLTRE delay Arc elettronico per simulare ${gradi_arc}° di copertura.`);
+        finalResults.notes.push(`ℹ️ NOTA MISURAZIONI: La spaziatura longitudinale è misurata dal centro del sub. La profondità tra linee è misurata tra centri acustici.`);
+
+    } else if (config.setup_primario === 'gradient' && config.setup_secondario === 'arc') {
+        finalResults.title = `Gradient + Arc Elettronico`;
+
+        let primaryPositions = [];
+        let primaryCalc = calculateGradient(numero_subwoofer, frequenza_crossover);
+            
+        if (numero_subwoofer % 2 !== 0) {
+            finalResults.notes.push(`Attenzione: Per il setup Gradient, il numero totale di subwoofer (${numero_subwoofer}) dovrebbe essere pari.`);
+        }
+
+        if (primaryCalc.numPairs === 0) {
+            finalResults.notes.push(`⚠️ Numero insufficiente di subwoofer per formare coppie gradient.`);
+            const serializableResults = {
+                title: finalResults.title,
+                notes: [...finalResults.notes],
+                positions: [],
+                dimensions: { width: 0, depth: 0 },
+                summary: [],
+                delayTable: []
+            };
+            const serializableConfig = {
+                numero_subwoofer: numero_subwoofer,
+                taglio: config.taglio,
+                frequenza_crossover: config.frequenza_crossover,
+                frequenza_target_cancellazione: config.frequenza_target_cancellazione,
+                distanza_fisica_gradient: config.distanza_fisica_gradient,
+                setup_primario: config.setup_primario,
+                setup_secondario: config.setup_secondario,
+                numero_linee: config.numero_linee,
+                gradi_arc: config.gradi_arc,
+                numero_sub_arc: config.numero_sub_arc,
+                profondita_sub_cardioid: config.profondita_sub_cardioid,
+                numero_stack_cardioid: config.numero_stack_cardioid,
+                larghezza_massima: config.larghezza_massima,
+                considera_centro_acustico: config.considera_centro_acustico,
+                offset_centro_acustico: config.offset_centro_acustico,
+                unita_ritardo: config.unita_ritardo,
+                note: config.note
+            };
+            navigate(createPageUrl('Overview'), { state: { config: serializableConfig, results: serializableResults } });
+            return;
+        }
+
+        let currentId = 1;
+
+        for (let pairIdx = 0; pairIdx < primaryCalc.pairsPerLine; pairIdx++) {
+            if (currentId > numero_subwoofer) break;
+            
+            const pair_x = -primaryCalc.width / 2 + pairIdx * primaryCalc.longitudinalSpacing;
+            
+            primaryPositions.push({
+                id: currentId,
+                x: pair_x,
+                y: 0,
+                delay: primaryCalc.fr_delay,
+                polarity: -1,
+                attenuazione: 0,
+                label: `${currentId}`
+            });
+            currentId++;
+        }
+        
+        for (let pairIdx = 0; pairIdx < primaryCalc.pairsPerLine; pairIdx++) {
+            if (currentId > numero_subwoofer) break;
+            
+            const pair_x = -primaryCalc.width / 2 + pairIdx * primaryCalc.longitudinalSpacing;
+            
+            primaryPositions.push({
+                id: currentId,
+                x: pair_x,
+                y: primaryCalc.depthSpacing,
+                delay: 0,
+                polarity: 1,
+                attenuazione: 0,
+                label: `${currentId}`
+            });
+            currentId++;
+        }
+
+        finalResults.summary.push({ label: "Tipo Setup", value: "Gradient + Arc" });
+        finalResults.summary.push({ label: "Taglio Subwoofer", value: config.taglio });
+        finalResults.summary.push({ label: "Coppie Totali", value: `${primaryCalc.numPairs}` });
+        finalResults.summary.push({ label: "Profondità tra Centri Acustici", value: `${primaryCalc.depthSpacing.toFixed(2)} m` });
+        finalResults.summary.push({ label: "Distanza Fisica tra Griglie", value: `${(primaryCalc.d_fisico * 100).toFixed(0)} cm` });
+        finalResults.summary.push({ label: "Ritardo Linea Frontale", value: formatDelay(primaryCalc.fr_delay) });
+
+        const xs = primaryPositions.map(p => p.x);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const arcWidth = maxX - minX;
+        const centerX = (minX + maxX) / 2;
+
+        const angleRad = (gradi_arc * Math.PI) / 180;
+        let radius;
+        if (gradi_arc === 0) {
+            radius = Infinity;
+        } else {
+            radius = arcWidth / (2 * Math.sin(angleRad / 2));
+            if (isNaN(radius) || !isFinite(radius)) {
+                radius = arcWidth / (angleRad || 0.0001);
+            }
+        }
+
+        let minDistanceFromFocusCombined = Infinity;
+        const tempCombinedDistances = primaryPositions.map(pos => {
+            const relX = pos.x - centerX;
+            let distanceFromFocus = 0;
+            if (gradi_arc === 0) {
+                distanceFromFocus = 0;
+            } else if (isFinite(radius)) {
+                distanceFromFocus = Math.sqrt(Math.pow(relX, 2) + Math.pow(radius, 2));
+            }
+            minDistanceFromFocusCombined = Math.min(minDistanceFromFocusCombined, distanceFromFocus);
+            return { pos, distanceFromFocus };
+        });
+
+        finalResults.positions = tempCombinedDistances.map(item => {
+            const relX = item.pos.x - centerX;
+            let arcDelay = 0;
+            
+            if (gradi_arc !== 0 && isFinite(radius)) {
+                arcDelay = ((item.distanceFromFocus - minDistanceFromFocusCombined) / SPEED_OF_SOUND) * 1000;
+            }
+            
+            arcDelay = Math.max(0, arcDelay);
+            
+            return {
+                ...item.pos,
+                delay: item.pos.delay + arcDelay,
+                arcDelay: arcDelay
+            };
+        });
+
+        finalResults.summary.push({ label: "Angolo Arc", value: `${gradi_arc} °` });
+        finalResults.summary.push({ label: "Ritardo Max Arc", value: formatDelay(Math.max(...finalResults.positions.map(p => p.arcDelay || 0))) });
+        if (isFinite(radius)) {
+            finalResults.summary.push({ label: "Raggio Arc Virtuale", value: `${radius.toFixed(2)} m` });
+        }
+
+        finalResults.delayTable = finalResults.positions.map(p => {
+          let lineIdentifier = "";
+          if (p.id <= primaryCalc.pairsPerLine) {
+            lineIdentifier = "(L1)";
+          } else {
+            lineIdentifier = "(L2)";
+          }
+          return {
+            sub: `${p.id} ${lineIdentifier}`,
+            position: `Orizz: ${(primaryCalc.longitudinalSpacing * 100).toFixed(0)}cm / Prof: ${(primaryCalc.d_fisico * 100).toFixed(0)}cm (griglia-griglia)`,
+            delay: p.polarity === -1
+                ? `Front (Inverted): ${formatDelay(primaryCalc.fr_delay)} + Arc: ${formatDelay(p.arcDelay || 0)} = ${formatDelay(p.delay)}`
+                : `Arc: ${formatDelay(p.arcDelay || 0)} = ${formatDelay(p.delay)}`,
+            polarity: p.polarity === -1 ? '⚠️ INVERTITA' : 'Normale',
+            attenuazione: p.attenuazione ? `${p.attenuazione} dB` : '0 dB'
+          };
+        });
+
+        finalResults.notes.push(`Setup Gradient con ${numero_subwoofer} subwoofer ${config.taglio}.`);
+        finalResults.notes.push(`${primaryCalc.numPairs} coppie F/R con profondità acustica ${primaryCalc.depthSpacing.toFixed(2)}m.`);
+        finalResults.notes.push(`Spaziatura longitudinale tra coppie: ${primaryCalc.longitudinalSpacing.toFixed(2)}m.`);
+        finalResults.notes.push(`⚠️ IMPORTANTE: Invertire la polarità dei sub FRONTALI (vicino stage) e applicare un ritardo di ${formatDelay(primaryCalc.fr_delay)}.`);
+        finalResults.notes.push(`I sub posteriori (verso audience) mantengono polarità normale e nessun ritardo aggiuntivo (oltre l'Arc).`);
+        finalResults.notes.push(`Applicare INOLTRE delay Arc elettronico a TUTTI i sub per simulare ${gradi_arc}° di copertura.`);
+        finalResults.notes.push(`ℹ️ NOTA MISURAZIONI: La spaziatura longitudinale è misurata dal centro del sub. La profondità tra linee è misurata tra centri acustici.`);
+
+    } else if (config.setup_primario === 'endfire') {
+        finalResults.title = `Endfire Array (${numero_linee} Linee)`;
+        const results = calculateEndfire(numero_subwoofer, frequenza_crossover, numero_linee);
+
+        finalResults.summary.push({ label: "Taglio Subwoofer", value: config.taglio });
+        finalResults.summary.push({ label: "Frequenza Target Cancellazione", value: `${config.frequenza_target_cancellazione} Hz` });
+        finalResults.summary.push({ label: "Numero Linee", value: `${results.numLines}` });
+        finalResults.summary.push({ label: "Sub per Linea", value: `${results.subsPerLine}` });
+        finalResults.summary.push({ label: "Profondità (centro acustico)", value: `${results.depthSpacing.toFixed(2)} m` });
+        finalResults.summary.push({ label: "Profondità (griglia-griglia)", value: `${results.gridToGridDepth.toFixed(2)} m` });
+        finalResults.summary.push({ label: "Spaziatura Longitudinale", value: `${results.longitudinalSpacing.toFixed(2)} m` });
+        finalResults.summary.push({ label: "Ritardo tra Linee", value: formatDelay(results.depthDelay) });
+
+        let subGlobalId = 1;
+
+        for (let lineIdx = 0; lineIdx < results.numLines; lineIdx++) {
+            const line_y = lineIdx * results.depthSpacing;
+            const line_delay = lineIdx * results.depthDelay;
+            
+            for (let subIdx = 0; subIdx < results.subsPerLine; subIdx++) {
+                if (subGlobalId > numero_subwoofer) break;
+                
+                const sub_x = -results.width / 2 + subIdx * results.longitudinalSpacing;
+
+                finalResults.positions.push({
+                    id: subGlobalId++,
+                    x: sub_x,
+                    y: line_y,
+                    delay: line_delay,
+                    polarity: 1,
+                    attenuazione: 0,
+                    label: `${subGlobalId-1}`
+                });
+
+                finalResults.delayTable.push({
+                    sub: `${subGlobalId-1} (L${lineIdx + 1})`,
+                    position: `Orizz: ${(results.longitudinalSpacing * 100).toFixed(0)}cm / Prof: ${(results.gridToGridDepth * 100).toFixed(0)}cm (griglia-griglia)`,
+                    delay: formatDelay(line_delay),
+                    polarity: 'Normale',
+                    attenuazione: '0 dB'
+                });
+            }
+        }
+        
+        finalResults.notes.push(`Disporre i subwoofer ${config.taglio} in ${results.numLines} linee parallele.`);
+        finalResults.notes.push(`Linea 1 (vicino allo stage) → Linea ${results.numLines} (verso audience).`);
+        finalResults.notes.push(`Ogni linea ha ${results.subsPerLine} sub distanziati longitudinalmente di ${results.longitudinalSpacing.toFixed(2)}m.`);
+        finalResults.notes.push(`Profondità tra le linee (centro acustico): ${results.depthSpacing.toFixed(2)}m (λ/4 @ ${config.frequenza_target_cancellazione}Hz per cancellazione posteriore).`);
+        finalResults.notes.push(`Profondità tra le griglie: ${results.gridToGridDepth.toFixed(2)}m.`);
+        finalResults.notes.push(`Applicare un ritardo di ${formatDelay(results.depthDelay)} a ciascuna linea successiva.`);
+        finalResults.notes.push(`ℹ️ NOTA MISURAZIONI: La spaziatura longitudinale (${results.longitudinalSpacing.toFixed(2)}m) è misurata dal centro del sub. La profondità (${results.depthSpacing.toFixed(2)}m) è tra centri acustici.`);
+
+    } else if (config.setup_primario === 'gradient') {
+        finalResults.title = `Gradient Array`;
+
+        let primaryPositions = [];
+        let primaryCalc = calculateGradient(numero_subwoofer, frequenza_crossover);
+            
+        if (numero_subwoofer % 2 !== 0) {
+            finalResults.notes.push(`Attenzione: Per il setup Gradient, il numero totale di subwoofer (${numero_subwoofer}) dovrebbe essere pari.`);
+        }
+
+        if (primaryCalc.numPairs === 0) {
+            finalResults.notes.push(`⚠️ Numero insufficiente di subwoofer per formare coppie gradient.`);
+            const serializableResults = {
+                title: finalResults.title,
+                notes: [...finalResults.notes],
+                positions: [],
+                dimensions: { width: 0, depth: 0 },
+                summary: [],
+                delayTable: []
+            };
+            const serializableConfig = {
+                numero_subwoofer: numero_subwoofer,
+                taglio: config.taglio,
+                frequenza_crossover: config.frequenza_crossover,
+                frequenza_target_cancellazione: config.frequenza_target_cancellazione,
+                distanza_fisica_gradient: config.distanza_fisica_gradient,
+                setup_primario: config.setup_primario,
+                setup_secondario: config.setup_secondario,
+                numero_linee: config.numero_linee,
+                gradi_arc: config.gradi_arc,
+                numero_sub_arc: config.numero_sub_arc,
+                profondita_sub_cardioid: config.profondita_sub_cardioid,
+                numero_stack_cardioid: config.numero_stack_cardioid,
+                larghezza_massima: config.larghezza_massima,
+                considera_centro_acustico: config.considera_centro_acustico,
+                offset_centro_acustico: config.offset_centro_acustico,
+                unita_ritardo: config.unita_ritardo,
+                note: config.note
+            };
+            navigate(createPageUrl('Overview'), { state: { config: serializableConfig, results: serializableResults } });
+            return;
+        }
+
+        let currentId = 1;
+
+        for (let pairIdx = 0; pairIdx < primaryCalc.pairsPerLine; pairIdx++) {
+            if (currentId > numero_subwoofer) break;
+            
+            const pair_x = -primaryCalc.width / 2 + pairIdx * primaryCalc.longitudinalSpacing;
+            
+            primaryPositions.push({
+                id: currentId,
+                x: pair_x,
+                y: 0,
+                delay: primaryCalc.fr_delay,
+                polarity: -1,
+                attenuazione: 0,
+                label: `${currentId}`
+            });
+            currentId++;
+        }
+        
+        for (let pairIdx = 0; pairIdx < primaryCalc.pairsPerLine; pairIdx++) {
+            if (currentId > numero_subwoofer) break;
+            
+            const pair_x = -primaryCalc.width / 2 + pairIdx * primaryCalc.longitudinalSpacing;
+            
+            primaryPositions.push({
+                id: currentId,
+                x: pair_x,
+                y: primaryCalc.depthSpacing,
+                delay: 0,
+                polarity: 1,
+                attenuazione: 0,
+                label: `${currentId}`
+            });
+            currentId++;
+        }
+
+        finalResults.positions = primaryPositions;
+
+        finalResults.summary.push({ label: "Tipo Setup", value: "Gradient" });
+        finalResults.summary.push({ label: "Taglio Subwoofer", value: config.taglio });
+        finalResults.summary.push({ label: "Coppie Totali", value: `${primaryCalc.numPairs}` });
+        finalResults.summary.push({ label: "Profondità tra Centri Acustici", value: `${primaryCalc.depthSpacing.toFixed(2)} m` });
+        finalResults.summary.push({ label: "Distanza Fisica tra Griglie", value: `${(primaryCalc.d_fisico * 100).toFixed(0)} cm` });
+        finalResults.summary.push({ label: "Ritardo Linea Frontale", value: formatDelay(primaryCalc.fr_delay) });
+
+        finalResults.delayTable = finalResults.positions.map(p => {
+          let lineIdentifier = "";
+          if (p.id <= primaryCalc.pairsPerLine) {
+            lineIdentifier = "(L1)";
+          } else {
+            lineIdentifier = "(L2)";
+          }
+          return {
+            sub: `${p.id} ${lineIdentifier}`,
+            position: `Orizz: ${(primaryCalc.longitudinalSpacing * 100).toFixed(0)}cm / Prof: ${(primaryCalc.d_fisico * 100).toFixed(0)}cm (griglia-griglia)`,
+            delay: p.polarity === -1 ? `Front (Inverted): ${formatDelay(primaryCalc.fr_delay)}` : '0 ms',
+            polarity: p.polarity === -1 ? '⚠️ INVERTITA' : 'Normale',
+            attenuazione: p.attenuazione ? `${p.attenuazione} dB` : '0 dB'
+          };
+        });
+
+        finalResults.notes.push(`Setup Gradient con ${numero_subwoofer} subwoofer ${config.taglio}.`);
+        finalResults.notes.push(`${primaryCalc.numPairs} coppie F/R con profondità acustica ${primaryCalc.depthSpacing.toFixed(2)}m.`);
+        finalResults.notes.push(`Spaziatura longitudinale tra coppie: ${primaryCalc.longitudinalSpacing.toFixed(2)}m.`);
+        finalResults.notes.push(`⚠️ IMPORTANTE: Invertire la polarità dei sub FRONTALI (vicino stage) e applicare un ritardo di ${formatDelay(primaryCalc.fr_delay)}.`);
+        finalResults.notes.push(`I sub posteriori (verso audience) mantengono polarità normale e nessun ritardo.`);
+        finalResults.notes.push(`ℹ️ NOTA MISURAZIONI: La spaziatura longitudinale è misurata dal centro del sub. La profondità tra linee è misurata tra centri acustici.`);
+
+    } else if (config.setup_primario === 'stack_cardioid') {
+        if (config.setup_secondario === 'arc') {
+            finalResults.title = "Stack Cardioid + Arc Elettronico";
+            
+            const stackCalc = calculateStackCardioid(
+                numero_subwoofer, 
+                config.numero_stack_cardioid, 
+                config.profondita_sub_cardioid, 
+                frequenza_crossover
+            );
+            
+            const xs = stackCalc.positions.map(s => s.x);
+            const minX = Math.min(...xs);
+            const maxX = Math.max(...xs);
+            const arcWidth = maxX - minX;
+            const centerX = (minX + maxX) / 2;
+            
+            const angleRad = (gradi_arc * Math.PI) / 180;
+            let radius;
+            if (gradi_arc === 0) {
+                radius = Infinity;
+            } else {
+                radius = arcWidth / (2 * Math.sin(angleRad / 2));
+                if (isNaN(radius) || !isFinite(radius)) {
+                    radius = arcWidth / (angleRad || 0.0001);
+                }
+            }
+            
+            let minDistanceFromFocusCombined = Infinity;
+            const tempCombinedDistances = stackCalc.positions.map(stack => {
+                const relX = stack.x - centerX;
+                let distanceFromFocus = 0;
+                if (gradi_arc === 0) {
+                    distanceFromFocus = 0;
+                } else if (isFinite(radius)) {
+                    distanceFromFocus = Math.sqrt(Math.pow(relX, 2) + Math.pow(radius, 2));
+                }
+                minDistanceFromFocusCombined = Math.min(minDistanceFromFocusCombined, distanceFromFocus);
+                return { stack, distanceFromFocus };
+            });
+
+            finalResults.positions = tempCombinedDistances.map(item => {
+                const stack = item.stack;
+                let arcDelay = 0;
+                
+                if (gradi_arc !== 0 && isFinite(radius)) {
+                    arcDelay = ((item.distanceFromFocus - minDistanceFromFocusCombined) / SPEED_OF_SOUND) * 1000;
+                }
+                
+                arcDelay = Math.max(0, arcDelay);
+                
+                const updatedModules = stack.modules.map(module => ({
+                    ...module,
+                    delay: module.delay + arcDelay,
+                    arcDelay: arcDelay
+                }));
+                
+                return {
+                    ...stack,
+                    modules: updatedModules,
+                    arcDelay: arcDelay
+                };
+            });
+            
+            finalResults.summary.push({ label: "Tipo Setup", value: "Stack Cardioid + Arc" });
+            finalResults.summary.push({ label: "Taglio Subwoofer", value: config.taglio });
+            finalResults.summary.push({ label: "Numero Stack", value: `${stackCalc.numStacks}` });
+            finalResults.summary.push({ label: "Moduli per Stack", value: `${stackCalc.numModulesPerStack}` });
+            finalResults.summary.push({ label: "Profondità Sub", value: `${(stackCalc.DV * 100).toFixed(0)} cm` });
+            finalResults.summary.push({ label: "Spaziatura Orizzontale", value: `${stackCalc.horizontalSpacing.toFixed(2)} m` });
+            finalResults.summary.push({ label: "Ritardo Cardioid Base", value: formatDelay(stackCalc.delay_cardioid) });
+            finalResults.summary.push({ label: "Attenuazione Retro", value: `~${stackCalc.attenuazioneRetro} dB` });
+            finalResults.summary.push({ label: "Angolo Arc", value: `${gradi_arc} °` });
+            const currentStacksMaxArcDelay = finalResults.positions.length > 0 ? Math.max(...finalResults.positions.map(s => s.arcDelay || 0)) : 0;
+            finalResults.summary.push({ label: "Ritardo Max Arc", value: formatDelay(currentStacksMaxArcDelay) });
+            if (isFinite(radius)) {
+                finalResults.summary.push({ label: "Raggio Arc Virtuale", value: `${radius.toFixed(2)} m` });
+            }
+            
+            finalResults.delayTable = [];
+            finalResults.positions.forEach(stack => {
+                stack.modules.forEach((module, idx) => {
+                    let polarityNotes = [];
+                    if (module.fisicamente_invertito) polarityNotes.push("FISICAMENTE INVERTITO (verso palco)");
+                    if (module.polarity === -1) polarityNotes.push("Polarità ELETTRICA -");
+                    
+                    const baseCardioidDelay = module.fisicamente_invertito ? stackCalc.delay_cardioid : 0;
+                    
+                    let positionString = `Orizz: ${(stackCalc.horizontalSpacing * 100).toFixed(0)}cm`;
+                    positionString += ` / Prof. modulo: ${(stackCalc.DV * 100).toFixed(0)}cm`;
+
+                    finalResults.delayTable.push({
+                        sub: `Stack ${stack.stackIndex} - Modulo ${module.moduleIndex}`,
+                        position: positionString,
+                        delay: `Cardioid: ${formatDelay(baseCardioidDelay)} + Arc: ${formatDelay(module.arcDelay || 0)} = ${formatDelay(module.delay)}`,
+                        polarity: polarityNotes.join(" | ") || "Normale",
+                        attenuazione: '0 dB'
+                    });
+                });
+            });
+            
+            finalResults.notes.push(`Setup Stack Cardioid con Arc Elettronico combinato.`);
+            finalResults.notes.push(`Con ${stackCalc.numStacks} stack di ${stackCalc.numModulesPerStack} moduli ciascuno.`);
+            finalResults.notes.push(`Profondità fisica del sub: ${(stackCalc.DV * 100).toFixed(0)} cm.`);
+            finalResults.notes.push(`Spaziatura orizzontale tra stack: ${stackCalc.horizontalSpacing.toFixed(2)}m.`);
+            finalResults.notes.push(`⚠️ INVERSIONE FISICA: Solo il MODULO 1 di ogni stack deve essere montato FISICAMENTE AL CONTRARIO (driver verso palco/retro).`);
+            finalResults.notes.push(`⚠️ POLARITÀ ELETTRICA: Il MODULO 1 (fisicamente invertito) ha anche POLARITÀ ELETTRICA INVERTITA (-) per creare il gradient. I moduli frontali (2, 3...) hanno polarità normale (+).`);
+            finalResults.notes.push(`⚠️ RITARDO CARDIOID: Applicare un delay di ${formatDelay(stackCalc.delay_cardioid)} SOLO al modulo 1 (quello invertito verso palco).`);
+            finalResults.notes.push(`Applicare INOLTRE delay Arc elettronico a TUTTI i moduli di ogni stack per simulare un arco di ${gradi_arc}° di copertura orizzontale.`);
+            finalResults.notes.push(`Il delay Arc viene calcolato in base alla posizione X di ogni stack.`);
+            finalResults.notes.push(`Attenuazione posteriore stimata per ciascuno stack: ~${stackCalc.attenuazioneRetro} dB.`);
+            finalResults.notes.push(`ℹ️ NOTA MISURAZIONI: La spaziatura orizzontale tra stack è misurata dal centro dello stack.`);
+            
+            finalResults.dimensions.width = stackCalc.width;
+            finalResults.dimensions.depth = stackCalc.depth;
+            
+        } else {
+            finalResults.title = "Stack Cardioid";
+            
+            const stackCalc = calculateStackCardioid(
+                numero_subwoofer, 
+                config.numero_stack_cardioid, 
+                config.profondita_sub_cardioid, 
+                frequenza_crossover
+            );
+            
+            finalResults.summary.push({ label: "Taglio Subwoofer", value: config.taglio });
+            finalResults.summary.push({ label: "Numero Stack", value: `${stackCalc.numStacks}` });
+            finalResults.summary.push({ label: "Moduli per Stack", value: `${stackCalc.numModulesPerStack}` });
+            finalResults.summary.push({ label: "Profondità Sub", value: `${(stackCalc.DV * 100).toFixed(0)} cm` });
+            finalResults.summary.push({ label: "Spaziatura Orizzontale", value: `${stackCalc.horizontalSpacing.toFixed(2)} m` });
+            finalResults.summary.push({ label: "Ritardo Cardioid", value: formatDelay(stackCalc.delay_cardioid) });
+            finalResults.summary.push({ label: "Attenuazione Retro", value: `~${stackCalc.attenuazioneRetro} dB` });
+            
+            finalResults.positions = stackCalc.positions;
+            
+            finalResults.delayTable = [];
+            for (let stackIdx = 0; stackIdx < stackCalc.numStacks; stackIdx++) {
+                const stack = stackCalc.positions[stackIdx];
+                stack.modules.forEach((module, idx) => {
+                    let polarityNotes = [];
+                    if (module.fisicamente_invertito) polarityNotes.push("FISICAMENTE INVERTITO (verso palco)");
+                    if (module.polarity === -1) polarityNotes.push("Polarità ELETTRICA -");
+                    
+                    let positionString = `Orizz: ${(stackCalc.horizontalSpacing * 100).toFixed(0)}cm`;
+                    positionString += ` / Prof. modulo: ${(stackCalc.DV * 100).toFixed(0)}cm`;
+
+                    finalResults.delayTable.push({
+                        sub: `Stack ${stack.stackIndex} - Modulo ${module.moduleIndex}`,
+                        position: positionString,
+                        delay: formatDelay(module.delay),
+                        polarity: polarityNotes.join(" | ") || "Normale",
+                        attenuazione: '0 dB'
+                    });
+                });
+            }
+            
+            finalResults.notes.push(`Stack cardioid con ${stackCalc.numStacks} stack di ${stackCalc.numModulesPerStack} moduli ciascuno.`);
+            finalResults.notes.push(`Profondità fisica del sub: ${(stackCalc.DV * 100).toFixed(0)} cm.`);
+            finalResults.notes.push(`Spaziatura orizzontale tra stack: ${stackCalc.horizontalSpacing.toFixed(2)}m (max λ/4 @ ${frequenza_crossover}Hz).`);
+            
+            finalResults.notes.push(`⚠️ INVERSIONE FISICA: Solo il MODULO 1 di ogni stack deve essere montato FISICAMENTE AL CONTRARIO (driver verso palco/retro).`);
+            
+            finalResults.notes.push(`⚠️ POLARITÀ ELETTRICA: Il MODULO 1 (fisicamente invertito) ha anche POLARITÀ ELETTRICA INVERTITA (-) per creare il gradient. I moduli frontali (2, 3...) hanno polarità normale (+).`);
+            
+            finalResults.notes.push(`⚠️ RITARDO: Applicare un delay di ${formatDelay(stackCalc.delay_cardioid)} SOLO al modulo 1 (quello invertito verso palco).`);
+            
+            finalResults.notes.push(`📐 PRINCIPIO: Distanza tra moduli = λ/4. Vista frontale: Sub1 arriva λ/4 dopo (posizione) + λ/4 (delay) = λ/2, ma invertito → SOMMA. Vista posteriore: Sub1 arriva λ/4 prima (posizione) + λ/4 (delay) = simultaneo ma invertito → CANCELLAZIONE.`);
+            
+            finalResults.notes.push(`Logica a 2 BLOCCHI: Blocco A (modulo 1 invertito fisicamente + elettricamente + ritardato) vs Blocco B (moduli 2, 3... dritti + polarità normale).`);
+            finalResults.notes.push(`Attenuazione posteriore stimata: ~${stackCalc.attenuazioneRetro} dB.`);
+
+            finalResults.dimensions.width = stackCalc.width;
+            finalResults.dimensions.depth = stackCalc.depth;
+        }
+        
+    } else if (config.setup_primario === 'arc') {
+        finalResults.title = "Arc Elettronico";
+        const arcCalc = calculateElectronicArc(numero_subwoofer, gradi_arc, larghezza_massima);
+        
+        finalResults.summary.push({ label: "Taglio Subwoofer", value: config.taglio });
+        finalResults.summary.push({ label: "Numero Sub", value: `${numero_subwoofer}` });
+        finalResults.summary.push({ label: "Spaziatura Longitudinale", value: `${arcCalc.spacing.toFixed(2)} m` });
+        finalResults.summary.push({ label: "Ritardo Max (bordi)", value: formatDelay(arcCalc.maxDelay) });
+        finalResults.summary.push({ label: "Raggio Arc Virtuale", value: `${arcCalc.radius !== Infinity ? arcCalc.radius.toFixed(2) : 'N/A'} m` });
+        finalResults.summary.push({ label: "Angolo Copertura", value: `${gradi_arc} °` });
+        
+        finalResults.positions = arcCalc.positions;
+        
+        finalResults.delayTable = [];
+        arcCalc.positions.forEach(p => {
+            finalResults.delayTable.push({
+                sub: `${p.id}`,
+                position: `Orizz: ${(arcCalc.spacing * 100).toFixed(0)}cm`,
+                delay: formatDelay(p.delay),
+                polarity: 'Normale',
+                attenuazione: '0 dB'
+            });
+        });
+        
+        finalResults.notes.push(`Disporre ${numero_subwoofer} subwoofer ${config.taglio} in linea con spaziatura longitudinale di ${arcCalc.spacing.toFixed(2)}m.`);
+        finalResults.notes.push(`Larghezza totale: ${arcCalc.actualWidth.toFixed(2)}m.`);
+        finalResults.notes.push(`Il sub centrale ha delay 0ms. Applicare ritardi elettronici crescenti verso i bordi per simulare un arco di ${gradi_arc}°.`);
+        finalResults.notes.push(`ℹ️ NOTA MISURAZIONI: La spaziatura longitudinale (${arcCalc.spacing.toFixed(2)}m) è misurata dal centro del sub.`);
+        
+    } else {
+        finalResults.title = "Configurazione non supportata";
+        finalResults.notes.push("Il calcolo per questa configurazione non è ancora implementato.");
+    }
+
+    if (finalResults.positions.length > 0 && finalResults.dimensions.width === 0 && finalResults.dimensions.depth === 0) {
+        let allX = [];
+        let allY = [];
+
+        if (config.setup_primario === 'stack_cardioid') {
+            const DV = (parseFloat(config.profondita_sub_cardioid) / 100);
+            finalResults.positions.forEach(stack => {
+                stack.modules.forEach((module, moduleIdx) => {
+                    allX.push(stack.x);
+                    allY.push(stack.y + (moduleIdx * DV));
+                });
+            });
+        } else {
+            allX = finalResults.positions.map(p => p.x);
+            allY = finalResults.positions.map(p => p.y);
+        }
+
+        const minX = Math.min(...allX);
+        const maxX = Math.max(...allX);
+        const minY = Math.min(...allY);
+        const maxY = Math.max(...allY);
+
+        finalResults.dimensions.width = (maxX - minX) + subPhysicalDimension;
+        finalResults.dimensions.depth = (maxY - minY) + subPhysicalDimension;
+    } else if (finalResults.positions.length === 0) {
+        finalResults.dimensions.width = subPhysicalDimension;
+        finalResults.dimensions.depth = subPhysicalDimension;
+    }
+
+    let finalSerializablePositions = [];
+    if (config.setup_primario === 'stack_cardioid') {
+        finalSerializablePositions = finalResults.positions.map(stack => ({
+            id: stack.id,
+            stackIndex: stack.stackIndex,
+            x: stack.x,
+            y: stack.y,
+            modules: stack.modules.map(m => ({
+                moduleIndex: m.moduleIndex,
+                delay: m.delay,
+                polarity: m.polarity,
+                fisicamente_invertito: m.fisicamente_invertito,
+                arcDelay: m.arcDelay || 0
+            })),
+            label: stack.label,
+            arcDelay: stack.arcDelay || 0
+        }));
+    } else {
+        finalSerializablePositions = finalResults.positions.map(p => ({
+            id: p.id,
+            x: p.x,
+            y: p.y,
+            delay: p.delay,
+            polarity: p.polarity,
+            label: p.label,
+            fisicamente_invertito: p.fisicamente_invertito || false,
+            attenuazione: p.attenuazione || 0,
+            arcDelay: p.arcDelay || 0
+        }));
+    }
+
+    const serializableResults = {
+        title: finalResults.title,
+        notes: [...finalResults.notes],
+        positions: finalSerializablePositions,
+        dimensions: {
+            width: finalResults.dimensions.width,
+            depth: finalResults.dimensions.depth
+        },
+        summary: finalResults.summary.map(s => ({
+            label: s.label,
+            value: s.value
+        })),
+        delayTable: finalResults.delayTable.map(d => ({
+            sub: d.sub,
+            position: d.position,
+            delay: d.delay,
+            polarity: d.polarity,
+            attenuazione: d.attenuazione
+        }))
+    };
+
+    const serializableConfig = {
+        numero_subwoofer: numero_subwoofer,
+        taglio: config.taglio,
+        frequenza_crossover: config.frequenza_crossover,
+        frequenza_target_cancellazione: config.frequenza_target_cancellazione,
+        distanza_fisica_gradient: config.distanza_fisica_gradient,
+        setup_primario: config.setup_primario,
+        setup_secondario: config.setup_secondario,
+        numero_linee: config.numero_linee,
+        gradi_arc: config.gradi_arc,
+        numero_sub_arc: config.numero_sub_arc,
+        numero_stack_cardioid: config.numero_stack_cardioid,
+        profondita_sub_cardioid: config.profondita_sub_cardioid,
+        larghezza_massima: config.larghezza_massima,
+        considera_centro_acustico: config.considera_centro_acustico,
+        offset_centro_acustico: config.offset_centro_acustico,
+        unita_ritardo: config.unita_ritardo,
+        note: config.note
+    };
+
+    navigate(createPageUrl('Overview'), { state: { config: serializableConfig, results: serializableResults } });
+  };
+
+  const needsLineeConfig = config.setup_primario === "endfire";
+  const needsArcAngle = config.setup_primario === "arc" || config.setup_secondario === "arc";
+
+  const getSetupLabel = (setup) => {
+    const labels = {
+      endfire: "Endfire",
+      gradient: "Gradient",
+      stack_cardioid: "Stack Cardioid",
+      arc: "Arc Elettronico",
+      nessuno: "Nessuno"
+    };
+    return labels[setup] || setup;
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-3 md:p-6">
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-6 md:mb-8">
+          <h1 className="text-2xl md:text-4xl font-bold text-white mb-2">Configurazione Subwoofer</h1>
+          <p className="text-sm md:text-base text-slate-400">Sistema professionale per posizionamento e taratura</p>
+        </div>
+
+        {showSuccess && (
+          <Alert className={`mb-4 md:mb-6 ${isDarkTheme ? 'bg-green-500/10 border-green-500/50 text-green-400' : 'bg-green-50 border-green-200 text-green-700'}`}>
+            <Check className="h-4 w-4" />
+            <AlertDescription>
+              Configurazione salvata con successo!
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <div className="grid lg:grid-cols-3 gap-4 md:gap-6">
+          <div className="lg:col-span-2 space-y-4 md:space-y-6">
+            <Card className={`${bgCard} backdrop-blur-xl ${borderCard} shadow-xl`}>
+              <CardHeader className="p-4 md:p-6">
+                <CardTitle className={`flex items-center gap-2 ${textPrimary} text-lg md:text-xl`}>
+                  <Settings className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
+                  Configurazione Base
+                </CardTitle>
+                <CardDescription className={`${textSecondary} text-sm`}>
+                  Imposta i parametri fondamentali del sistema
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 md:space-y-6 p-4 md:p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="numero" className={`${textSecondary} text-sm`}>Numero Subwoofer Totali</Label>
+                    <Input
+                      id="numero"
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={config.numero_subwoofer}
+                      onChange={(e) => setConfig({...config, numero_subwoofer: e.target.value})}
+                      className={`${bgInput} ${textPrimary}`}
+                      placeholder="Es: 8"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="taglio" className={`${textSecondary} text-sm`}>Taglio</Label>
+                    <Select value={config.taglio} onValueChange={(value) => setConfig({...config, taglio: value})}>
+                      <SelectTrigger className={`${bgInput} ${textPrimary}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className={`${isDarkTheme ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'} ${textPrimary}`}>
+                        <SelectItem value={'12"'} className={`${textPrimary} ${isDarkTheme ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>12"</SelectItem>
+                        <SelectItem value={'15"'} className={`${textPrimary} ${isDarkTheme ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>15"</SelectItem>
+                        <SelectItem value={'18"'} className={`${textPrimary} ${isDarkTheme ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>18"</SelectItem>
+                        <SelectItem value={'21"'} className={`${textPrimary} ${isDarkTheme ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>21"</SelectItem>
+                        <SelectItem value={'24"'} className={`${textPrimary} ${isDarkTheme ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>24"</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="crossover" className={`${textSecondary} text-sm`}>
+                    Frequenza Crossover: {config.frequenza_crossover} Hz
+                  </Label>
+                  <Slider
+                    value={[config.frequenza_crossover]}
+                    onValueChange={(value) => setConfig({...config, frequenza_crossover: value[0]})}
+                    min={20}
+                    max={200}
+                    step={1}
+                    className="w-full"
+                  />
+                  <div className={`flex justify-between text-xs ${textSecondary}`}>
+                    <span>20 Hz</span>
+                    <span>200 Hz</span>
+                  </div>
+                </div>
+
+                <div className={`space-y-3 p-3 md:p-4 ${isDarkTheme ? 'bg-cyan-500/10 border-cyan-500/30' : 'bg-cyan-100 border-cyan-300'} border rounded-lg`}>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="centro_acustico" className={`${textSecondary} text-sm cursor-pointer`}>
+                      Considera Centro Acustico
+                    </Label>
+                    <input
+                      id="centro_acustico"
+                      type="checkbox"
+                      checked={config.considera_centro_acustico}
+                      onChange={(e) => setConfig({...config, considera_centro_acustico: e.target.checked})}
+                      className={`w-4 h-4 rounded ${bgInput} text-cyan-600 focus:ring-cyan-500`}
+                    />
+                  </div>
+                  {config.considera_centro_acustico && (
+                    <div className="space-y-2">
+                      <Label htmlFor="offset" className={`${textSecondary} text-sm`}>
+                        Offset Centro Acustico (centimetri)
+                      </Label>
+                      <Input
+                        id="offset"
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={config.offset_centro_acustico}
+                        onChange={(e) => setConfig({...config, offset_centro_acustico: parseFloat(e.target.value) || 0})}
+                        className={`${bgInput} ${textPrimary}`}
+                      />
+                      <p className={`text-xs ${textSecondary}`}>
+                        Distanza in cm dal bordo della griglia al centro acustico del driver
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className={`space-y-2 p-3 md:p-4 ${isDarkTheme ? 'bg-amber-500/10 border-amber-500/30' : 'bg-amber-100 border-amber-300'} border rounded-lg`}>
+                  <Label className={`${textSecondary} text-sm`}>Unità Ritardo</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setConfig({...config, unita_ritardo: "ms"})}
+                      className={`flex-1 ${
+                        config.unita_ritardo === "ms" 
+                          ? `${isDarkTheme ? 'bg-white text-slate-900' : 'bg-blue-600 text-white'} hover:opacity-90`
+                          : `${bgInput} ${textSecondary}`
+                      }`}
+                    >
+                      Millisecondi (ms)
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setConfig({...config, unita_ritardo: "m"})}
+                      className={`flex-1 ${
+                        config.unita_ritardo === "m"
+                          ? `${isDarkTheme ? 'bg-white text-slate-900' : 'bg-blue-600 text-white'} hover:opacity-90`
+                          : `${bgInput} ${textSecondary}`
+                      }`}
+                    >
+                      Metri (m)
+                    </Button>
+                  </div>
+                  <p className={`text-xs ${textSecondary} mt-2`}>
+                    Scegli come visualizzare i ritardi nei risultati
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className={`${bgCard} backdrop-blur-xl ${borderCard} shadow-xl`}>
+              <CardHeader className="p-4 md:p-6">
+                <CardTitle className={`flex items-center gap-2 ${textPrimary} text-lg md:text-xl`}>
+                  <Radio className="w-4 h-4 md:w-5 md:h-5 text-purple-400" />
+                  Tipologia Setup
+                </CardTitle>
+                <CardDescription className={`${textSecondary} text-sm`}>
+                  Seleziona configurazione principale e combinazioni
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 md:space-y-6 p-4 md:p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="setup_primario" className={`${textSecondary} text-sm`}>Setup Principale</Label>
+                    <Select
+                      value={config.setup_primario}
+                      onValueChange={(value) => setConfig({...config, setup_primario: value, setup_secondario: 'nessuno'})}
+                    >
+                      <SelectTrigger className={`${bgInput} ${textPrimary}`}>
+                        <SelectValue placeholder="Seleziona setup..." />
+                      </SelectTrigger>
+                      <SelectContent className={`${isDarkTheme ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'} ${textPrimary}`}>
+                        <SelectItem value="endfire" className={`${textPrimary} ${isDarkTheme ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>Endfire</SelectItem>
+                        <SelectItem value="gradient" className={`${textPrimary} ${isDarkTheme ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>Gradient</SelectItem>
+                        <SelectItem value="stack_cardioid" className={`${textPrimary} ${isDarkTheme ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>Stack Cardioid</SelectItem>
+                        <SelectItem value="arc" className={`${textPrimary} ${isDarkTheme ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>Arc (Semplice)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="setup_secondario" className={`${textSecondary} text-sm`}>Combinazione</Label>
+                    <Select
+                      value={config.setup_secondario}
+                      onValueChange={(value) => setConfig({...config, setup_secondario: value})}
+                      disabled={config.setup_primario === 'arc' || !config.setup_primario}
+                    >
+                      <SelectTrigger className={`${bgInput} ${textPrimary} disabled:opacity-50`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className={`${isDarkTheme ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'} ${textPrimary}`}>
+                        <SelectItem value="nessuno" className={`${textPrimary} ${isDarkTheme ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>Nessuno</SelectItem>
+                        <SelectItem value="arc" className={`${textPrimary} ${isDarkTheme ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>+ Arc Elettronico</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {config.setup_primario === 'endfire' && (
+                  <div className={`space-y-2 p-3 md:p-4 ${isDarkTheme ? 'bg-purple-500/10 border-purple-500/30' : 'bg-purple-100 border-purple-300'} border rounded-lg`}>
+                    <Label htmlFor="freq_target" className={`${textSecondary} text-sm`}>
+                      Frequenza Target Cancellazione Posteriore: {config.frequenza_target_cancellazione} Hz
+                    </Label>
+                    <Slider
+                      value={[config.frequenza_target_cancellazione]}
+                      onValueChange={(value) => setConfig({...config, frequenza_target_cancellazione: value[0]})}
+                      min={20}
+                      max={200}
+                      step={1}
+                      className="w-full"
+                    />
+                    <div className={`flex justify-between text-xs ${textSecondary}`}>
+                      <span>20 Hz</span>
+                      <span>200 Hz</span>
+                    </div>
+                    <p className={`text-xs ${textSecondary} mt-2`}>
+                      La spaziatura in profondità sarà ottimizzata per cancellare questa frequenza sul retro dell'array
+                    </p>
+                  </div>
+                )}
+
+                {config.setup_primario === 'gradient' && (
+                  <div className={`space-y-2 p-3 md:p-4 ${isDarkTheme ? 'bg-purple-500/10 border-purple-500/30' : 'bg-purple-100 border-purple-300'} border rounded-lg`}>
+                    {(() => {
+                      const safeFreq = config.frequenza_crossover > 0 ? config.frequenza_crossover : 80;
+                      const optimalLambdaQuarterCm = Math.round((343 / (safeFreq * 4)) * 100);
+                      const maxLambdaHalfCm = Math.round((343 / (safeFreq * 2)) * 100);
+                      const currentDist = parseFloat(config.distanza_fisica_gradient) || 0;
+
+                      return (
+                        <>
+                          <Label htmlFor="dist_gradient_slider" className={`${textSecondary} text-sm`}>
+                            Distanza Fisica tra Griglie: {currentDist} cm
+                          </Label>
+                          <div className="relative">
+                            <Slider
+                              id="dist_gradient_slider"
+                              value={[currentDist]}
+                              onValueChange={(value) => {
+                                const val = value[0];
+                                setConfig({...config, distanza_fisica_gradient: Math.min(val, maxLambdaHalfCm).toString()});
+                              }}
+                              min={0}
+                              max={maxLambdaHalfCm}
+                              step={1}
+                              className="w-full"
+                            />
+                            <div 
+                              className="absolute top-1/2 -translate-y-1/2 w-1 h-6 bg-red-500 rounded pointer-events-none"
+                              style={{ left: `${(optimalLambdaQuarterCm / maxLambdaHalfCm) * 100}%` }}
+                            />
+                          </div>
+                          <div className={`flex justify-between text-xs ${textSecondary}`}>
+                            <span>0 cm</span>
+                            <span className="text-red-400 font-semibold">{optimalLambdaQuarterCm} cm (λ/4 - ottimale)</span>
+                            <span>{maxLambdaHalfCm} cm (λ/2 - max)</span>
+                          </div>
+                          <Input
+                            id="dist_gradient_input"
+                            type="number"
+                            min={0}
+                            max={maxLambdaHalfCm}
+                            step={1}
+                            value={currentDist.toString()}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              if (!isNaN(val)) {
+                                setConfig({...config, distanza_fisica_gradient: Math.min(val, maxLambdaHalfCm).toString()});
+                              } else {
+                                setConfig({...config, distanza_fisica_gradient: ""});
+                              }
+                            }}
+                            className={`${bgInput} ${textPrimary} mt-2`}
+                            placeholder="Inserisci valore in cm"
+                          />
+                          <div className={`mt-2 p-2 ${bgInput} rounded ${borderCard}`}>
+                            <p className={`text-xs ${textSecondary}`}>
+                              <span className="font-semibold text-green-400">✓ OTTIMALE (λ/4 = {optimalLambdaQuarterCm}cm):</span> Massima cancellazione posteriore @ {config.frequenza_crossover}Hz
+                            </p>
+                            <p className={`text-xs ${textSecondary} mt-1`}>
+                              <span className="font-semibold text-yellow-400">⚠ Fino a λ/2 ({maxLambdaHalfCm}cm):</span> Funziona ma con prestazioni ridotte
+                            </p>
+                          </div>
+                          <p className={`text-xs ${textSecondary} mt-2`}>
+                            Distanza fisica misurata tra la griglia del sub frontale e la griglia del sub posteriore. <span className="font-semibold text-green-400">Gradient usa sempre 2 linee</span> (frontale + retro).
+                          </p>
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {config.setup_primario === 'stack_cardioid' && (
+                  <div className={`space-y-4 p-3 md:p-4 ${isDarkTheme ? 'bg-purple-500/10 border-purple-500/30' : 'bg-purple-100 border-purple-300'} border rounded-lg`}>
+                    <div className="space-y-2">
+                      <Label className={`${textSecondary} text-sm`}>Numero Moduli per Stack</Label>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setConfig({...config, numero_stack_cardioid: 2})}
+                          className={`flex-1 ${
+                            config.numero_stack_cardioid === 2
+                              ? `${isDarkTheme ? 'bg-white text-slate-900' : 'bg-blue-600 text-white'} hover:opacity-90`
+                              : `${bgInput} ${textSecondary}`
+                          }`}
+                        >
+                          2 Moduli
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setConfig({...config, numero_stack_cardioid: 3})}
+                          className={`flex-1 ${
+                            config.numero_stack_cardioid === 3
+                              ? `${isDarkTheme ? 'bg-white text-slate-900' : 'bg-blue-600 text-white'} hover:opacity-90`
+                              : `${bgInput} ${textSecondary}`
+                          }`}
+                        >
+                          3 Moduli
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="prof_sub" className={`${textSecondary} text-sm`}>
+                        Profondità Sub (centimetri) *
+                      </Label>
+                      <Input
+                        id="prof_sub"
+                        type="number"
+                        min={30}
+                        max={150}
+                        step={1}
+                        value={config.profondita_sub_cardioid}
+                        onChange={(e) => setConfig({...config, profondita_sub_cardioid: e.target.value})}
+                        className={`${bgInput} ${textPrimary}`}
+                        placeholder="Es: 60"
+                        required
+                      />
+                      <p className={`text-xs ${textSecondary}`}>
+                        * Campo obbligatorio - Profondità fisica del cabinet in cm
+                      </p>
+                    </div>
+                    
+                    <p className={`text-xs ${textSecondary}`}>
+                      Configurazione verticale con polarità alternata per pattern cardioide.
+                    </p>
+                  </div>
+                )}
+
+                {needsLineeConfig && (
+                  <div className={`space-y-2 p-3 md:p-4 ${isDarkTheme ? 'bg-green-500/10 border-green-500/30' : 'bg-green-100 border-green-300'} border rounded-lg`}>
+                    <Label htmlFor="linee" className={`${textSecondary} text-sm`}>
+                      Numero di Linee (minimo 2)
+                    </Label>
+                    <Input
+                      id="linee"
+                      type="number"
+                      min={2}
+                      max={20}
+                      value={config.numero_linee}
+                      onChange={(e) => setConfig({...config, numero_linee: Math.max(2, parseInt(e.target.value) || 2)})}
+                      className={`${bgInput} ${textPrimary}`}
+                    />
+                    <p className={`text-xs ${textSecondary} mt-2`}>
+                      Disponi i subwoofer su {config.numero_linee} linee parallele (la prima vicino allo stage, le successive verso l'audience)
+                    </p>
+                  </div>
+                )}
+
+                {needsArcAngle && (
+                  <div className={`space-y-4 md:space-y-6 p-3 md:p-4 ${isDarkTheme ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-100 border-blue-300'} border rounded-lg`}>
+                    <div className="space-y-2">
+                      <Label htmlFor="arc" className={`${textSecondary} text-sm`}>
+                        Gradi di Radiazione Arc: {config.gradi_arc} °
+                      </Label>
+                      <Slider
+                        value={[config.gradi_arc]}
+                        onValueChange={(value) => setConfig({...config, gradi_arc: value[0]})}
+                        min={0}
+                        max={270}
+                        step={5}
+                        className="w-full"
+                      />
+                      <div className={`flex justify-between text-xs ${textSecondary}`}>
+                        <span>0° (linea)</span>
+                        <span>270°</span>
+                      </div>
+                      {config.setup_primario === 'endfire' && config.setup_secondario === 'arc' && (
+                        <p className={`text-xs ${textSecondary} mt-2`}>
+                          I delay dell'Arc saranno aggiunti ai delay di Endfire
+                        </p>
+                      )}
+                      {config.setup_primario === 'gradient' && config.setup_secondario === 'arc' && (
+                        <p className={`text-xs ${textSecondary} mt-2`}>
+                          I delay dell'Arc saranno aggiunti ai delay di Gradient
+                        </p>
+                      )}
+                      {config.setup_primario === 'stack_cardioid' && config.setup_secondario === 'arc' && (
+                        <p className={`text-xs ${textSecondary} mt-2`}>
+                          I delay dell'Arc saranno aggiunti ai delay di Stack Cardioid
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className={`${bgCard} backdrop-blur-xl ${borderCard} shadow-xl`}>
+              <CardHeader className="p-4 md:p-6">
+                <CardTitle className={`flex items-center gap-2 ${textPrimary} text-lg md:text-xl`}>
+                  <Maximize2 className="w-4 h-4 md:w-5 md:h-5 text-green-400" />
+                  Dimensioni Spazio
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 p-4 md:p-6">
+                <div className="space-y-2">
+                  <Label htmlFor="larghezza" className={`${textSecondary} text-sm`}>
+                    Larghezza Massima (metri)
+                  </Label>
+                  <Input
+                    id="larghezza"
+                    type="number"
+                    min={1}
+                    max={100}
+                    step={0.5}
+                    value={config.larghezza_massima}
+                    onChange={(e) => setConfig({...config, larghezza_massima: parseFloat(e.target.value) || 1})}
+                    className={`${bgInput} ${textPrimary}`}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className={`${bgCard} backdrop-blur-xl ${borderCard} shadow-xl`}>
+              <CardHeader className="p-4 md:p-6">
+                <CardTitle className={`flex items-center gap-2 ${textPrimary} text-lg md:text-xl`}>
+                  <Info className="w-4 h-4 md:w-5 md:h-5 text-yellow-400" />
+                  Note Aggiuntive
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 md:p-6">
+                <Textarea
+                  value={config.note}
+                  onChange={(e) => setConfig({...config, note: e.target.value})}
+                  placeholder="Aggiungi eventuali note sulla configurazione..."
+                  className={`${bgInput} ${textPrimary} placeholder:text-slate-500 min-h-[100px]`}
+                />
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-4 md:space-y-6">
+            <Card className="bg-gradient-to-br from-blue-600 to-purple-600 border-none shadow-xl lg:sticky lg:top-6">
+              <CardHeader className="p-4 md:p-6">
+                <CardTitle className="text-white text-lg md:text-xl">Riepilogo Configurazione</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 p-4 md:p-6">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center text-white">
+                    <span className="text-xs md:text-sm opacity-90">Subwoofer:</span>
+                    <Badge className="bg-white/20 text-white text-xs md:text-sm">{config.numero_subwoofer || 'N/A'}</Badge>
+                  </div>
+                  <Separator className="bg-white/20" />
+
+                  <div className="flex justify-between items-center text-white">
+                    <span className="text-xs md:text-sm opacity-90">Taglio:</span>
+                    <Badge className="bg-white/20 text-white text-xs md:text-sm">{config.taglio}</Badge>
+                  </div>
+                  <Separator className="bg-white/20" />
+
+                  <div className="flex justify-between items-center text-white">
+                    <span className="text-xs md:text-sm opacity-90">Crossover:</span>
+                    <Badge className="bg-white/20 text-white text-xs md:text-sm">{config.frequenza_crossover} Hz</Badge>
+                  </div>
+
+                  {config.setup_primario === 'endfire' && (
+                    <>
+                      <Separator className="bg-white/20" />
+                      <div className="flex justify-between items-center text-white">
+                        <span className="text-xs md:text-sm opacity-90">Freq. Target Canc.:</span>
+                        <Badge className="bg-white/20 text-white text-xs md:text-sm">{config.frequenza_target_cancellazione} Hz</Badge>
+                      </div>
+                    </>
+                  )}
+
+                  <Separator className="bg-white/20" />
+                  <div className="flex justify-between items-center text-white">
+                    <span className="text-xs md:text-sm opacity-90">Setup:</span>
+                    <Badge className="bg-white/20 text-white text-xs md:text-sm">
+                      {config.setup_primario ? getSetupLabel(config.setup_primario) : 'Nessuno'}
+                      {config.setup_secondario !== "nessuno" && ` + ${getSetupLabel(config.setup_secondario)}`}
+                    </Badge>
+                  </div>
+
+                  {needsLineeConfig && (
+                    <>
+                      <Separator className="bg-white/20" />
+                      <div className="flex justify-between items-center text-white">
+                        <span className="text-xs md:text-sm opacity-90">N° Linee:</span>
+                        <Badge className="bg-white/20 text-white text-xs md:text-sm">{config.numero_linee}</Badge>
+                      </div>
+                    </>
+                  )}
+
+                  {config.setup_primario === 'stack_cardioid' && (
+                    <>
+                      <Separator className="bg-white/20" />
+                      <div className="flex justify-between items-center text-white">
+                        <span className="text-xs md:text-sm opacity-90">N° Moduli Stack:</span>
+                        <Badge className="bg-white/20 text-white text-xs md:text-sm">{config.numero_stack_cardioid}</Badge>
+                      </div>
+                      <Separator className="bg-white/20" />
+                      <div className="flex justify-between items-center text-white">
+                        <span className="text-xs md:text-sm opacity-90">Prof. Sub Cardioid:</span>
+                        <Badge className="bg-white/20 text-white text-xs md:text-sm">{config.profondita_sub_cardioid || "Non specificata"} cm</Badge>
+                      </div>
+                    </>
+                  )}
+
+                  {needsArcAngle && (
+                    <>
+                      <Separator className="bg-white/20" />
+                      <div className="flex justify-between items-center text-white">
+                        <span className="text-xs md:text-sm opacity-90">Gradi Arc:</span>
+                        <Badge className="bg-white/20 text-white text-xs md:text-sm">{config.gradi_arc}°</Badge>
+                      </div>
+                    </>
+                  )}
+
+                  {config.considera_centro_acustico && (
+                    <>
+                      <Separator className="bg-white/20" />
+                      <div className="flex justify-between items-center text-white">
+                        <span className="text-xs md:text-sm opacity-90">Offset Centro Acustico:</span>
+                        <Badge className="bg-white/20 text-white text-xs md:text-sm">{config.offset_centro_acustico} cm</Badge>
+                      </div>
+                    </>
+                  )}
+
+                  {config.setup_primario === 'gradient' && config.distanza_fisica_gradient !== "" && (
+                    <>
+                      <Separator className="bg-white/20" />
+                      <div className="flex justify-between items-center text-white">
+                        <span className="text-xs md:text-sm opacity-90">Dist. Fisica Grad.:</span>
+                        <Badge className="bg-white/20 text-white text-xs md:text-sm">{config.distanza_fisica_gradient} cm</Badge>
+                      </div>
+                    </>
+                  )}
+
+                  <Separator className="bg-white/20" />
+                  <div className="flex justify-between items-center text-white">
+                    <span className="text-xs md:text-sm opacity-90">Larghezza Max:</span>
+                    <Badge className="bg-white/20 text-white text-xs md:text-sm">{config.larghezza_massima} m</Badge>
+                  </div>
+
+                  <Separator className="bg-white/20" />
+                  <div className="flex justify-between items-center text-white">
+                    <span className="text-xs md:text-sm opacity-90">Unità Ritardo:</span>
+                    <Badge className="bg-white/20 text-white text-xs md:text-sm">{config.unita_ritardo === "ms" ? "ms" : "m"}</Badge>
+                  </div>
+
+                </div>
+
+                <div className="space-y-3 mt-6">
+                  <Button
+                    onClick={handleCalculate}
+                    className="w-full bg-white text-blue-600 hover:bg-white/90 font-bold text-base md:text-lg py-5 md:py-6"
+                  >
+                    <Calculator className="w-4 h-4 md:w-5 md:h-5 mr-2" />
+                    Calcola
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className={`${bgCard} backdrop-blur-xl ${borderCard} hidden lg:block`}>
+              <CardHeader className="p-4">
+                <CardTitle className={`${textPrimary} text-sm`}>Informazioni</CardTitle>
+              </CardHeader>
+              <CardContent className={`text-xs ${textSecondary} space-y-2 p-4`}>
+                <p>• Endfire: Allineamento lineare per direttività anteriore</p>
+                <p>• Gradient: Riduce emissioni posteriori</p>
+                <p>• Arc Elettronico: Disposizione curva con copertura controllata</p>
+                <p>• Stack Cardioid: Stack verticale per maggiore attenuazione posteriore</p>
+                <p>• Il diametro del sub influenza la spaziatura acustica minima</p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
