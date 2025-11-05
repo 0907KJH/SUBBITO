@@ -4,6 +4,7 @@ Project checklist (live status)
 - [x] Clarify Project Requirements — Existing Vite + React + Tailwind project; no new scaffolding required.
 - [x] Scaffold the Project — Skipped, project already initialized and populated.
 - [x] Customize the Project — Implemented L‑R secondary (none/endfire/gradient/stack cardioid), PAN control, L‑R visual overhaul (rectangles, connecting lines with center distance, readable labels), Report tweaks (hide distance for L‑R, PAN note), and Stack Cardioid per‑side summary. Updated: L‑R + Gradient limited to 4 subs (one pair per side); rear inverted with delay = physical cone spacing/c.
+ - [x] Customize the Project — Implemented L‑R secondary (none/endfire/gradient/stack cardioid), PAN control, L‑R visual overhaul (rectangles, connecting lines with center distance, readable labels), Report tweaks (hide distance for L‑R, PAN note), and Stack Cardioid per‑side summary. Updated: L‑R + Gradient limited to 4 subs (one pair per side); rear inverted with delay = physical cone spacing/c. New: L‑R delay table labels unified to L1.. then R.. (e.g., L1 L2 R3 R4) and L‑R line spacing shown in both Configuration summary and Overview info.
 - [x] Install Required Extensions — Skipped, none needed.
 - [x] Compile the Project — Build OK (vite build) as of 2025‑11‑01.
 - [x] Create and Run Task — Skipped, not necessary for this project unless requested.

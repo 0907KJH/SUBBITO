@@ -36,7 +36,9 @@ export default function EnhancedSetupVisualizer({ positions, dimensions, config,
         }
 
         const viewWidth = maxDisplayX + padding * 2;
-        const viewHeight = 0.5 + 0.5 + maxModuleDisplayY;
+    // Aggiungi margine extra in basso per evitare clipping dei testi durante resize
+    const bottomExtra = 0.35;
+    const viewHeight = 0.5 + 0.5 + maxModuleDisplayY + bottomExtra;
     
         const viewBoxMinX = -padding;
         const viewBoxMinY = -0.5;
@@ -170,7 +172,7 @@ export default function EnhancedSetupVisualizer({ positions, dimensions, config,
                         </p>
                     </div>
                     <div className="space-y-1">
-                        <p className={`text-xs ${cardTextPrimary}`}>ProfonditÃ  Sub</p>
+                        <p className={`text-xs ${cardTextPrimary}`}>Profondità Sub</p>
                         <p className={`text-xl font-bold ${isDarkTheme ? 'text-yellow-400' : 'text-yellow-600'}`}>{config.profondita_sub_cardioid || 60} cm</p>
                     </div>
                     <div className="space-y-1">
@@ -188,11 +190,11 @@ export default function EnhancedSetupVisualizer({ positions, dimensions, config,
         );
     }
     
-    // ===== L - R: visual stile 2-linee con rettangoli colorati e linee di collegamento =====
+    // ===== L - R: visual stile 2-linee con rettangoli colorati =====
     if (isLR) {
     const actualWidth = Math.max(0.5, Number(dimensions?.width || 0) || Number(config?.larghezza_massima || 0) || 2);
     // Visual LR: separazione orizzontale piÃ¹ stretta (~ -1/3)
-    const visualSep = 3.5; // distanza visiva tra L e R (unitÃ  SVG)
+    const visualSep = 3.5; // distanza visiva tra L e R (unità SVG)
 
         const leftCount = positions.filter(p => p.x < 0).length || positions.length / 2;
         const rightCount = positions.filter(p => p.x > 0).length || positions.length / 2;
@@ -261,7 +263,7 @@ export default function EnhancedSetupVisualizer({ positions, dimensions, config,
     // Abbassa la scritta "AUDIENCE" di ~3 cm equivalenti nel nostro spazio SVG:
     // approssimiamo con uno spostamento D nel viewBox e aumentiamo l'altezza di 2D
     // per mantenere visibile il testo senza clipping in basso.
-    const audienceShift = 0.70; // D (unitÃ  viewBox) ~ 3cm + 4cm aggiuntivi
+    const audienceShift = 0.70; // D (unità viewBox) ~ 3cm + 4cm aggiuntivi
     viewHeight += 2 * audienceShift;
     const viewBoxMinX = -viewWidth / 2;
     const viewBoxMinY = -viewHeight / 2;
@@ -270,13 +272,14 @@ export default function EnhancedSetupVisualizer({ positions, dimensions, config,
         const leftFill = isDarkTheme ? '#3b82f6' : '#60a5fa';    // blue
         const rightFill = isDarkTheme ? '#d946ef' : '#f472b6';   // fuchsia/pink
 
-        // Prepara liste per Stack Cardioid (servono sia dentro che fuori dai gruppi ruotati)
+        // Prepara liste per visualizzazione 'a discesa' (stack e nessuno)
         const isStack = config.setup_secondario === 'stack_cardioid';
+        const useFixedLists = isStack || config.setup_secondario === 'nessuno';
         let leftList = [];
         let rightList = [];
         let leftHasInvert = false;
         let rightHasInvert = false;
-        if (isStack) {
+        if (useFixedLists) {
             leftHasInvert = leftPositions.some(p => p.polarity === -1);
             rightHasInvert = rightPositions.some(p => p.polarity === -1);
             leftList = leftPositions
@@ -296,6 +299,13 @@ export default function EnhancedSetupVisualizer({ positions, dimensions, config,
         }
     const lineStroke = isStack ? 0.04 : 0.03;
     const centralFont = isStack ? 0.40 : 0.30;
+        // Calcola spaziatura tra le linee (prima vs seconda profondità)
+        const yKeys = Array.from(new Set(positions
+            .map(p => typeof p.y === 'number' ? +p.y.toFixed(6) : null)
+            .filter(v => v !== null)))
+            .sort((a,b)=>a-b);
+        const lrLineSpacing = yKeys.length >= 2 ? +(Math.abs(yKeys[1] - yKeys[0]).toFixed(2)) : null;
+
         return (
             <div className="w-full space-y-4">
                 <svg 
@@ -304,29 +314,12 @@ export default function EnhancedSetupVisualizer({ positions, dimensions, config,
                     style={{ height: isStack ? '660px' : '600px', maxHeight: isStack ? '74vh' : '70vh' }}
                     preserveAspectRatio="xMidYMid meet"
                 >
-                    {/* Sfondo senza griglia per look piÃ¹ pulito */}
+                    {/* Sfondo senza griglia per look più pulito */}
                     <rect x={viewBoxMinX} y={viewBoxMinY} width={viewWidth} height={viewHeight} fill="none" />
 
-                    {/* Linee di collegamento per ogni livello di profonditÃ  (sempre visibili) */}
-                    {(() => {
-                        const yKeys = Array.from(new Set(allY.map(y => y.toFixed(3)))).sort((a,b)=>parseFloat(a)-parseFloat(b));
-                        if (yKeys.length === 0) return null;
-                        const yDisp = mapY(parseFloat(yKeys[0])); // solo la prima (piÃ¹ vicina allo STAGE)
-                        return (
-                            <g key={`conn-0`}>
-                                <line x1={leftX} y1={yDisp} x2={rightX} y2={yDisp} stroke={textColor} strokeWidth={lineStroke} opacity="0.8" />
-                                {/* Sposta la misura sotto la linea per evitare sovrapposizioni con "STAGE" in tutti i setup (es. Lâ€‘R + Gradient) */}
-                                <text x={0} y={yDisp + 0.45} fill={textColor} fontSize={isStack ? centralFont : 0.42} fontWeight="bold" textAnchor="middle">
-                                    {`${actualWidth.toFixed(0)} mt`}
-                                </text>
-                            </g>
-                        );
-                    })()}
+                    {/* (Rimosso) Nessuna linea orizzontale con misura centrale per setup L-R */}
 
-                    {/* Etichette STAGE/AUDIENCE (alzo ancora STAGE per maggiore separazione) */}
-                    {/* Alza ulteriormente STAGE per massima separazione dalla misura centrale */}
-                    <text x={0} y={viewBoxMinY + 0.08} fill={textColor} fontSize="0.38" fontWeight="bold" textAnchor="middle">STAGE</text>
-                    <text x={0} y={viewBoxMinY + viewHeight - 0.10} fill={textColor} fontSize="0.35" fontWeight="bold" textAnchor="middle">AUDIENCE</text>
+                    {/* Scritte STAGE/AUDIENCE rimosse: la dicitura è mostrata sopra l'SVG */}
 
                     {/* Gruppo SINISTRA */}
                     <g transform={`rotate(${angleLeft} ${leftX} ${leftPivotDispY})`}>
@@ -369,20 +362,25 @@ export default function EnhancedSetupVisualizer({ positions, dimensions, config,
                                                 <circle cx={cx - rectWm/2 + 0.1} cy={cy - rectHm/2 + 0.1} r={0.06} fill="red" stroke={textColor} strokeWidth="0.02" />
                                             )}
                                         </g>
-                                        <text x={labelX} y={labelY} fill={textColor} fontSize="0.30" fontWeight="bold" textAnchor="middle" transform={`rotate(${-angleLeft} ${labelX} ${labelY})`}>
-                                            {`${info.side}${info.idx}`}
-                                        </text>
-                                        <text x={labelX} y={delayY} fill={textColor} fontSize="0.26" textAnchor="middle" transform={`rotate(${-angleLeft} ${labelX} ${delayY})`}>
-                                            {config.unita_ritardo === 'ms' ? `${(p.delay||0).toFixed(0)}ms` : `${(((p.delay||0)/1000)*343).toFixed(2)}m`}
-                                        </text>
+                                        {/* Per 'nessuno', evita testi vicino ai moduli per non sovrapporre; usa liste fisse sotto */}
+                                        {config.setup_secondario !== 'nessuno' && (
+                                            <>
+                                                <text x={labelX} y={labelY} fill={textColor} fontSize="0.30" fontWeight="bold" textAnchor="middle" transform={`rotate(${-angleLeft} ${labelX} ${labelY})`}>
+                                                    {`${info.side}${info.idx}`}
+                                                </text>
+                                                <text x={labelX} y={delayY} fill={textColor} fontSize="0.26" textAnchor="middle" transform={`rotate(${-angleLeft} ${labelX} ${delayY})`}>
+                                                    {config.unita_ritardo === 'ms' ? `${(p.delay||0).toFixed(0)}ms` : `${(((p.delay||0)/1000)*343).toFixed(2)}m`}
+                                                </text>
+                                            </>
+                                        )}
                                     </g>
                                 );
                             })
                         )}
                     </g>
 
-                    {/* Liste SINISTRA fisse (solo Stack Cardioid): non seguono il PAN */}
-                    {isStack && (() => {
+                    {/* Liste SINISTRA fisse: non seguono il PAN (stack e nessuno) */}
+                    {useFixedLists && (() => {
                         const cx = leftX;
                         const cy = leftPivotDispY;
                         const baseY = cy + 1.05;
@@ -446,20 +444,25 @@ export default function EnhancedSetupVisualizer({ positions, dimensions, config,
                                                 <circle cx={cx - rectWm/2 + 0.1} cy={cy - rectHm/2 + 0.1} r={0.06} fill="red" stroke={textColor} strokeWidth="0.02" />
                                             )}
                                         </g>
-                                        <text x={labelX} y={labelY} fill={textColor} fontSize="0.30" fontWeight="bold" textAnchor="middle" transform={`rotate(${-angleRight} ${labelX} ${labelY})`}>
-                                            {`${info.side}${info.idx}`}
-                                        </text>
-                                        <text x={labelX} y={delayY} fill={textColor} fontSize="0.26" textAnchor="middle" transform={`rotate(${-angleRight} ${labelX} ${delayY})`}>
-                                            {config.unita_ritardo === 'ms' ? `${(p.delay||0).toFixed(0)}ms` : `${(((p.delay||0)/1000)*343).toFixed(2)}m`}
-                                        </text>
+                                        {/* Per 'nessuno', evita testi vicino ai moduli per non sovrapporre; usa liste fisse sotto */}
+                                        {config.setup_secondario !== 'nessuno' && (
+                                            <>
+                                                <text x={labelX} y={labelY} fill={textColor} fontSize="0.30" fontWeight="bold" textAnchor="middle" transform={`rotate(${-angleRight} ${labelX} ${labelY})`}>
+                                                    {`${info.side}${info.idx}`}
+                                                </text>
+                                                <text x={labelX} y={delayY} fill={textColor} fontSize="0.26" textAnchor="middle" transform={`rotate(${-angleRight} ${labelX} ${delayY})`}>
+                                                    {config.unita_ritardo === 'ms' ? `${(p.delay||0).toFixed(0)}ms` : `${(((p.delay||0)/1000)*343).toFixed(2)}m`}
+                                                </text>
+                                            </>
+                                        )}
                                     </g>
                                 );
                             })
                         )}
                     </g>
 
-                    {/* Liste DESTRA fisse (solo Stack Cardioid): non seguono il PAN */}
-                    {isStack && (() => {
+                    {/* Liste DESTRA fisse: non seguono il PAN (stack e nessuno) */}
+                    {useFixedLists && (() => {
                         const cx = rightX;
                         const cy = rightPivotDispY;
                         const baseY = cy + 1.05;
@@ -482,7 +485,7 @@ export default function EnhancedSetupVisualizer({ positions, dimensions, config,
                     })()}
                 </svg>
 
-                <div className={`grid grid-cols-2 gap-4 p-4 ${cardBg} rounded-lg border ${cardBorder}`}>
+                <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${cardBg} rounded-lg border ${cardBorder}`}>
                     <div className="space-y-1">
                         <p className={`text-xs ${cardTextPrimary}`}>Moduli per lato</p>
                         <p className={`text-xl font-bold ${cardTextValue}`}>{Math.max(leftCount, rightCount)}</p>
@@ -490,6 +493,12 @@ export default function EnhancedSetupVisualizer({ positions, dimensions, config,
                     <div className="space-y-1">
                         <p className={`text-xs ${cardTextPrimary}`}>Distanza L-R (reale)</p>
                         <p className={`text-xl font-bold ${isDarkTheme ? 'text-blue-400' : 'text-blue-600'}`}>{actualWidth.toFixed(2)} m</p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className={`text-xs ${cardTextPrimary}`}>Spaziatura linee (GRIGLIA-GRIGLIA)</p>
+                        <p className={`text-xl font-bold ${isDarkTheme ? 'text-yellow-400' : 'text-yellow-600'}`}>
+                            {typeof lrLineSpacing === 'number' ? `L1/R3–L2/R4 ${lrLineSpacing.toFixed(2)} m` : 'N/D'}
+                        </p>
                     </div>
                 </div>
             </div>
@@ -539,10 +548,13 @@ export default function EnhancedSetupVisualizer({ positions, dimensions, config,
     const minDisplayY = Math.min(...newPositions.map(p => p.displayY));
     
     const viewWidth = maxDisplayX + padding * 2;
-    const viewHeight = maxDisplayY - minDisplayY + 0.5 + padding;
+    // Pad superiore/inferiore per evitare che i testi (soprattutto i delay in basso) vengano tagliati
+    const topPad = 0.8;
+    const bottomPad = 1.2;
+    const viewHeight = (maxDisplayY - minDisplayY) + topPad + bottomPad + padding;
     
     const viewBoxMinX = -padding;
-    const viewBoxMinY = minDisplayY - 0.5;
+    const viewBoxMinY = minDisplayY - topPad;
 
     const delays = positions.map(p => p.delay);
     const minDelay = Math.min(...delays);
@@ -640,7 +652,7 @@ export default function EnhancedSetupVisualizer({ positions, dimensions, config,
                 )}
                 {depthSpacing > 0 && (
                     <div className="space-y-1">
-                        <p className={`text-xs ${cardTextPrimary}`}>ProfonditÃ  tra Linee</p>
+                        <p className={`text-xs ${cardTextPrimary}`}>Profondità tra Linee</p>
                         <p className={`text-xl font-bold ${isDarkTheme ? 'text-red-400' : 'text-red-600'}`}>{depthSpacing.toFixed(2)} m</p>
                     </div>
                 )}

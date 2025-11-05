@@ -9,7 +9,7 @@ export default function AcousticHeatmap({ positions = [], config = {}, frequency
         <div className="font-semibold mb-2">Mappa acustica (placeholder)</div>
         <div>Posizioni: {positions?.length ?? 0}</div>
         <div>Freq: {frequency} Hz</div>
-        {typeof arcAngle !== 'undefined' && <div>Angolo Arc: {arcAngle}Â°</div>}
+  {typeof arcAngle !== 'undefined' && <div>Angolo Arc: {arcAngle}°</div>}
         <div className="mt-3 text-xs text-slate-400">Sostituire con l'implementazione reale del componente per visualizzare SPL</div>
       </div>
     </div>

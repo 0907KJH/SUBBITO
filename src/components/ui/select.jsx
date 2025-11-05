@@ -75,7 +75,7 @@ export function SelectTrigger({ className, children, isOpen, displayValue, value
       ) : (
         children
       )}
-      <span className={`transition-transform ${isOpen ? 'rotate-180' : ''}`}>â–¼</span>
+      <span className={`transition-transform ${isOpen ? 'rotate-180' : ''}`}>▼</span>
     </button>
   );
 }

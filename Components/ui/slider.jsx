@@ -12,3 +12,4 @@ export const Slider = ({ value, onChange, min = 0, max = 100, step = 1, classNam
 
 export default Slider;
 
+

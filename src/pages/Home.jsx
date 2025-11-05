@@ -337,14 +337,14 @@ export default function Home() {
       const profSub = parseFloat(config.profondita_sub_cardioid);
       
       if (isNaN(numModuli) || numModuli < 2) {
-        setErrors(prev => [...prev, "âŒ Stack Cardioid: numero di moduli per stack deve essere almeno 2"]);
+  setErrors(prev => [...prev, "❌ Stack Cardioid: numero di moduli per stack deve essere almeno 2"]);
         return;
       }
       
       if (isNaN(profSub) || profSub <= 0 || config.profondita_sub_cardioid === "") {
         setErrors(prev => [...prev, 
-          "âŒ Stack Cardioid: specifica la profonditÃ  fisica del sub in centimetri",
-          "ðŸ’¡ Esempio: per un sub 18\" usa circa 60 cm"
+          "❌ Stack Cardioid: specifica la profondità fisica del sub in centimetri",
+          "💡 Esempio: per un sub 18\" usa circa 60 cm"
         ]);
         return;
       }
@@ -357,8 +357,8 @@ export default function Home() {
           }
         }
         setErrors(prev => [...prev, 
-          `âŒ Stack Cardioid: ${numSubs} subwoofer non sono divisibili per ${numModuli} moduli`,
-          `ðŸ’¡ Opzioni valide con ${numSubs} sub:`,
+          `❌ Stack Cardioid: ${numSubs} subwoofer non sono divisibili per ${numModuli} moduli`,
+          `💡 Opzioni valide con ${numSubs} sub:`,
           ...validStacks
         ]);
         return;
@@ -366,8 +366,8 @@ export default function Home() {
       
       if (numSubs < numModuli) {
         setErrors(prev => [...prev, 
-          `âŒ Stack Cardioid: servono almeno ${numModuli} sub per fare ${numModuli} moduli per stack`,
-          `ðŸ’¡ Hai solo ${numSubs} sub. Riduci il numero di moduli o aggiungi sub.`
+          `❌ Stack Cardioid: servono almeno ${numModuli} sub per fare ${numModuli} moduli per stack`,
+          `💡 Hai solo ${numSubs} sub. Riduci il numero di moduli o aggiungi sub.`
         ]);
         return;
       }
@@ -378,8 +378,8 @@ export default function Home() {
       const arcAngle = parseFloat(config.gradi_arc);
       if (isNaN(arcAngle) || arcAngle < 0 || arcAngle > 270) {
         setErrors(prev => [...prev, 
-          "âŒ Arc: angolo deve essere tra 0Â° e 270Â°",
-          `ðŸ’¡ Hai inserito: ${config.gradi_arc}Â°`
+          "❌ Arc: angolo deve essere tra 0° e 270°",
+          `💡 Hai inserito: ${config.gradi_arc}°`
         ]);
         return;
       }
@@ -387,13 +387,13 @@ export default function Home() {
 
     // Validazione larghezza massima
     if (parseFloat(config.larghezza_massima) <= 0) {
-      setErrors(prev => [...prev, "âŒ Larghezza massima deve essere maggiore di 0 metri"]);
+  setErrors(prev => [...prev, "❌ Larghezza massima deve essere maggiore di 0 metri"]);
       return;
     }
 
     // Validazione frequenza
     if (parseFloat(config.frequenza_crossover) <= 0) {
-      setErrors(prev => [...prev, "âŒ Frequenza di crossover deve essere maggiore di 0 Hz"]);
+  setErrors(prev => [...prev, "❌ Frequenza di crossover deve essere maggiore di 0 Hz"]);
       return;
     }
 
@@ -415,7 +415,7 @@ export default function Home() {
       setTimeout(() => setShowSuccess(false), 3000);
     } catch (error) {
       console.error('[Home] Calculation error:', error);
-      setErrors(prev => [...prev, `âŒ Errore nel calcolo: ${error.message}`]);
+  setErrors(prev => [...prev, `❌ Errore nel calcolo: ${error.message}`]);
     }
   };
 
@@ -481,7 +481,6 @@ export default function Home() {
     <div className={`min-h-screen ${bgMain} ${textPrimary}`}>
       <div className="container mx-auto pt-2 pb-6 md:py-6">
         <h1 className="text-3xl font-bold mb-4 text-center md:text-left">CONFIGURAZIONE</h1>
-        
         <Card className={`mb-6 ${bgCard} ${borderCard}`}>
           <CardContent className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -534,18 +533,16 @@ export default function Home() {
                   type="number"
                   value={config.larghezza_massima}
                   onChange={setFieldWithDebug('larghezza_massima')}
+                  placeholder="Es: 15"
                   className={bgInput}
                 />
               </div>
 
-              {/* Setup primario (solo quando NON Ã¨ attivo un box dedicato) */}
+              {/* Setup primario (solo quando NON è attivo un box dedicato) */}
               {!(config.setup_primario === 'endfire' || config.setup_primario === 'gradient' || config.setup_primario === 'stack_cardioid' || config.setup_primario === 'arc') && (
                 <div className="space-y-2">
                   <Label htmlFor="setup_primario">Setup Primario</Label>
-                  <Select 
-                    value={config.setup_primario} 
-                    onChange={setSetupPrimario}
-                  >
+                  <Select value={config.setup_primario} onChange={setSetupPrimario}>
                     <SelectTrigger className={bgInput}>
                       <SelectValue placeholder="Seleziona il setup" />
                     </SelectTrigger>
@@ -559,12 +556,12 @@ export default function Home() {
                   </Select>
                 </div>
               )}
-              {/* Il select del Setup Secondario viene mostrato DOPO il box primario (se non Ã¨ Arc) */}
+              {/* Il select del Setup Secondario viene mostrato DOPO il box primario (se non è Arc) */}
 
-              {/* Frequenza target cancellazione per Endfire - subito dopo la selezione */}
-              {config.setup_primario === 'endfire' && (
+                  {/* Parametri Endfire secondario */}
+                {config.setup_primario === 'endfire' && (
                 <div className="space-y-3 p-4 border border-green-500/30 rounded-lg bg-green-500/5">
-                  {/* Setup Primario INSCRITTO nel box quando Endfire Ã¨ attivo */}
+                  {/* Setup Primario INSCRITTO nel box quando Endfire è attivo */}
                   <div className="space-y-2">
                     <Label htmlFor="setup_primario" className="text-green-400">Setup Primario</Label>
                     <Select 
@@ -583,9 +580,6 @@ export default function Home() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <Label htmlFor="frequenza_target_cancellazione" className="text-green-400">
-                    Frequenza Target Cancellazione (Hz)
-                  </Label>
                   <div className="space-y-2">
                     <Input
                       id="frequenza_target_cancellazione"
@@ -609,9 +603,7 @@ export default function Home() {
                     </div>
                     <div className="flex justify-between text-xs text-green-400">
                       <span>20 Hz</span>
-                      <span className="text-green-400">
-                        {config.frequenza_target_cancellazione} Hz
-                      </span>
+                      <span className="text-green-400">{config.frequenza_target_cancellazione} Hz</span>
                       <span>200 Hz</span>
                     </div>
                   </div>
@@ -635,7 +627,7 @@ export default function Home() {
                     />
                   </div>
                 </div>
-              )}
+                )}
 
               {/* Controlli specifici per setup */}
               {/* Numero di linee Ã¨ stato spostato all'interno del box Endfire */}
@@ -739,7 +731,7 @@ export default function Home() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <Label htmlFor="gradi_arc" className="text-green-400">Angolo Arc Array: {config.gradi_arc}Â°</Label>
+                    <Label htmlFor="gradi_arc" className="text-green-400">Angolo Arc Array: {config.gradi_arc}°</Label>
                     <div className="space-y-2">
                       <Input
                         id="gradi_arc"
@@ -761,9 +753,9 @@ export default function Home() {
                         />
                       </div>
                       <div className="flex justify-between text-xs text-green-400">
-                        <span>0Â°</span>
-                        <span className="text-green-400">90Â° (raccomandato)</span>
-                        <span>270Â° (max)</span>
+                        <span>0°</span>
+                        <span className="text-green-400">90° (raccomandato)</span>
+                        <span>270° (max)</span>
                       </div>
                     </div>
                     <p className="text-xs text-green-400">
@@ -816,13 +808,13 @@ export default function Home() {
                     <Separator className="opacity-30" />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="profondita_sub" className="text-green-400">ProfonditÃ  Sub (cm)</Label>
+                    <Label htmlFor="profondita_sub" className="text-green-400">Profondità Sub (cm)</Label>
                     <Input
                       id="profondita_sub"
                       type="number"
                       value={config.profondita_sub_cardioid}
                       onChange={setFieldWithDebug('profondita_sub_cardioid')}
-                      placeholder="ProfonditÃ  fisica del sub"
+                      placeholder="Profondità fisica del sub"
                       className={bgInput}
                     />
                     <p className="text-xs text-green-400">Valore fisico (cabinet) usato per la disposizione dei moduli.</p>
@@ -871,7 +863,7 @@ export default function Home() {
                     </Select>
                   </div>
 
-                  <Label htmlFor="gradi_arc_sec" className="text-green-400">Angolo Arc Secondario: {config.gradi_arc}Â°</Label>
+                  <Label htmlFor="gradi_arc_sec" className="text-green-400">Angolo Arc Secondario: {config.gradi_arc}°</Label>
                   <div className="space-y-2">
                     <Input
                       id="gradi_arc_sec"
@@ -893,9 +885,9 @@ export default function Home() {
                       />
                     </div>
                     <div className="flex justify-between text-xs text-green-400">
-                      <span>0Â°</span>
-                      <span className="text-green-400">90Â° (raccomandato)</span>
-                      <span>270Â° (max)</span>
+                      <span>0°</span>
+                      <span className="text-green-400">90° (raccomandato)</span>
+                      <span>270° (max)</span>
                     </div>
                   </div>
                   <p className="text-xs text-green-400">
@@ -981,7 +973,7 @@ export default function Home() {
 
                       {/* PAN per secondario */}
                       <div className="mt-3 space-y-2">
-                        <Label htmlFor="gradi_pan_endfire" className="text-green-400">PAN (Â°)</Label>
+                        <Label htmlFor="gradi_pan_endfire" className="text-green-400">PAN (°)</Label>
                         <Input
                           id="gradi_pan_endfire"
                           type="number"
@@ -1002,9 +994,9 @@ export default function Home() {
                           />
                         </div>
                         <div className="flex justify-between text-xs text-green-400">
-                          <span>-90Â°</span>
-                          <span>0Â°</span>
-                          <span>+90Â°</span>
+                          <span>-90°</span>
+                          <span>0°</span>
+                          <span>+90°</span>
                         </div>
                       </div>
                     </div>
@@ -1069,7 +1061,7 @@ export default function Home() {
 
                       {/* PAN per secondario */}
                       <div className="mt-3 space-y-2">
-                        <Label htmlFor="gradi_pan_gradient" className="text-green-400">PAN (Â°)</Label>
+                        <Label htmlFor="gradi_pan_gradient" className="text-green-400">PAN (°)</Label>
                         <Input
                           id="gradi_pan_gradient"
                           type="number"
@@ -1090,9 +1082,9 @@ export default function Home() {
                           />
                         </div>
                         <div className="flex justify-between text-xs text-green-400">
-                          <span>-90Â°</span>
-                          <span>0Â°</span>
-                          <span>+90Â°</span>
+                          <span>-90°</span>
+                          <span>0°</span>
+                          <span>+90°</span>
                         </div>
                       </div>
                     </div>
@@ -1119,14 +1111,14 @@ export default function Home() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <Label htmlFor="profondita_sub_lr" className="text-green-400">ProfonditÃ  Sub (cm)</Label>
+                      <Label htmlFor="profondita_sub_lr" className="text-green-400">Profondità Sub (cm)</Label>
                       <div className="space-y-2">
                         <Input
                           id="profondita_sub_lr"
                           type="number"
                           value={config.profondita_sub_cardioid}
                           onChange={setFieldWithDebug('profondita_sub_cardioid')}
-                          placeholder="ProfonditÃ  fisica del sub"
+                          placeholder="Profondità fisica del sub"
                           className={bgInput}
                         />
                         <p className="text-xs text-green-400">Usato per calcolare il delay cardioide DV/c del modulo girato.</p>
@@ -1134,7 +1126,7 @@ export default function Home() {
 
                       {/* PAN per secondario */}
                       <div className="mt-3 space-y-2">
-                        <Label htmlFor="gradi_pan_stack" className="text-green-400">PAN (Â°)</Label>
+                        <Label htmlFor="gradi_pan_stack" className="text-green-400">PAN (°)</Label>
                         <Input
                           id="gradi_pan_stack"
                           type="number"
@@ -1155,9 +1147,9 @@ export default function Home() {
                           />
                         </div>
                         <div className="flex justify-between text-xs text-green-400">
-                          <span>-90Â°</span>
-                          <span>0Â°</span>
-                          <span>+90Â°</span>
+                          <span>-90°</span>
+                          <span>0°</span>
+                          <span>+90°</span>
                         </div>
                       </div>
                     </div>
@@ -1168,7 +1160,7 @@ export default function Home() {
               {/* Controlli sempre visibili */}
 
               <div className="space-y-2">
-                <Label htmlFor="unita_ritardo">UnitÃ  di Misura Ritardo</Label>
+                <Label htmlFor="unita_ritardo">Unità di Misura Ritardo</Label>
                 <Select value={config.unita_ritardo} onChange={setFieldWithDebug('unita_ritardo')}>
                   <SelectTrigger className={bgInput}>
                     <SelectValue />

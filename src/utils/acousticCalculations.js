@@ -304,7 +304,7 @@ export const calculateSubwooferSetup = (config) => {
     
     finalResults.dimensions = { width: endfireCalc.width, depth: endfireCalc.depth };
     finalResults.summary.push(`Endfire: ${endfireCalc.numLines} linee, delay ${formatDelay(endfireCalc.depthDelay)}`);
-    finalResults.summary.push(`Arc: ${arcAngle}Â°, raggio ${isFinite(arcCalc.radius) ? arcCalc.radius.toFixed(2) + 'm' : 'âˆž'}`);
+  finalResults.summary.push(`Arc: ${arcAngle}°, raggio ${isFinite(arcCalc.radius) ? arcCalc.radius.toFixed(2) + 'm' : '∞'}`);
     finalResults.summary.push(`Delay Arc massimo: ${formatDelay(arcCalc.maxDelay)}`);
   }
   
@@ -519,7 +519,7 @@ export const calculateSubwooferSetup = (config) => {
     
     finalResults.dimensions = { width: gradientCalc.width, depth: gradientCalc.depth };
     finalResults.summary.push(`Gradient: ${gradientCalc.numPairs} coppie, delay F-R ${formatDelay(gradientCalc.fr_delay)}`);
-    finalResults.summary.push(`Arc: ${arcAngle}Â°, raggio ${isFinite(arcCalc.radius) ? arcCalc.radius.toFixed(2) + 'm' : 'âˆž'}`);
+  finalResults.summary.push(`Arc: ${arcAngle}°, raggio ${isFinite(arcCalc.radius) ? arcCalc.radius.toFixed(2) + 'm' : '∞'}`);
     finalResults.summary.push(`Delay Arc massimo: ${formatDelay(arcCalc.maxDelay)}`);
   }
   
@@ -549,7 +549,7 @@ export const calculateSubwooferSetup = (config) => {
     finalResults.dimensions = { width: cardioidCalc.width, depth: cardioidCalc.depth };
     finalResults.summary.push(`Stack Cardioid: ${cardioidCalc.numStacks} stack, ${numModules} moduli/stack`);
     finalResults.summary.push(`Delay cardioide: ${formatDelay(cardioidCalc.delay_cardioid)}`);
-    finalResults.summary.push(`Arc: ${arcAngle}Â°, raggio ${isFinite(arcCalc.radius) ? arcCalc.radius.toFixed(2) + 'm' : 'âˆž'}`);
+  finalResults.summary.push(`Arc: ${arcAngle}°, raggio ${isFinite(arcCalc.radius) ? arcCalc.radius.toFixed(2) + 'm' : '∞'}`);
     finalResults.summary.push(`Delay Arc massimo: ${formatDelay(arcCalc.maxDelay)}`);
     if (acousticOffset > 0) {
       finalResults.summary.push(`Centro acustico considerato: ${offset_centro_acustico} cm (DV effettivo = ${(cardioidCalc.DV_eff).toFixed(2)} m)`);
@@ -713,12 +713,12 @@ export const calculateSubwooferSetup = (config) => {
     // Usa sempre tutti i sub disponibili; la spaziatura verrÃ  limitata a Î»/4 e alla larghezza disponibile
     const arcSubs = numSubs;
     const arcAngle = parseFloat(gradi_arc) || 90;
-    finalResults.title = `Arc Elettronico (${arcAngle}Â°)`;
+  finalResults.title = `Arc Elettronico (${arcAngle}°)`;
     const calc = calculateElectronicArc(arcSubs, arcAngle, larghezza_massima);
     
     finalResults.positions = calc.positions;
     finalResults.dimensions = { width: calc.actualWidth, depth: 0 };
-    finalResults.summary.push(`Angolo: ${arcAngle}Â°`);
+  finalResults.summary.push(`Angolo: ${arcAngle}°`);
     finalResults.summary.push(`Raggio: ${isFinite(calc.radius) ? calc.radius.toFixed(2) + ' m' : 'âˆž'}`);
     finalResults.summary.push(`Spaziatura: ${calc.spacing.toFixed(2)} m`);
     finalResults.summary.push(`Delay massimo: ${formatDelay(calc.maxDelay)}`);

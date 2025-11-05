@@ -6,3 +6,4 @@ export const Skeleton = ({ className = '' }) => (
 
 export default Skeleton;
 
+

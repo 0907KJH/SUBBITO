@@ -96,7 +96,7 @@ export default function Report() {
     const isStackCardioid = config.setup_primario === 'stack_cardioid';
     const isLR = config.setup_primario === 'l_r';
 
-    // Costruisci mappa "label originale" -> { idx, label: "n (L/R)", side }
+    // Costruisci mappa di visualizzazione per L-R: etichette L1..Lk poi R{k+1}.., e ordering L prima di R
     let lrDisplayMap = null;
     if (isLR && Array.isArray(results.positions) && results.positions.length > 0) {
       const decorated = results.positions.map(p => {
@@ -105,14 +105,21 @@ export default function Report() {
         const side = m ? m[1].toUpperCase() : ((p.x || 0) < 0 ? 'L' : 'R');
         return { ...p, side };
       });
+      // Ordina per profondità (y crescente ~ verso STAGE), poi L prima di R
       decorated.sort((a, b) => {
-        if (a.y !== b.y) return a.y - b.y; // piÃ¹ negativo (vicino palco) prima
+        if (a.y !== b.y) return a.y - b.y;
         if (a.side !== b.side) return a.side === 'L' ? -1 : 1;
         return (a.x || 0) - (b.x || 0);
       });
+      const leftSorted = decorated.filter(p => p.side === 'L').slice().sort((a,b)=>a.y-b.y);
+      const rightSorted = decorated.filter(p => p.side === 'R').slice().sort((a,b)=>a.y-b.y);
+      const leftCount = leftSorted.length;
       lrDisplayMap = new Map();
-      decorated.forEach((p, idx) => {
-        lrDisplayMap.set(p.label, { idx: idx + 1, label: `${idx + 1} (${p.side})`, side: p.side });
+      leftSorted.forEach((p, i) => {
+        lrDisplayMap.set(p.label, { idx: i + 1, label: `L${i + 1}`, side: 'L' });
+      });
+      rightSorted.forEach((p, i) => {
+        lrDisplayMap.set(p.label, { idx: leftCount + i + 1, label: `R${leftCount + i + 1}`, side: 'R' });
       });
     }
 
@@ -123,7 +130,7 @@ export default function Report() {
       let isFisicamenteInvertito = false;
       const originalSub = row.sub || '';
 
-      // L-R: usa label unificata e ordering per profonditÃ 
+      // L-R: usa label unificata con schema L1..Lk R{k+1}.. e ordering per profondità
       if (isLR && lrDisplayMap && lrDisplayMap.has(originalSub)) {
         subLabel = lrDisplayMap.get(originalSub).label;
       } else if (isStackCardioid) {
@@ -165,7 +172,7 @@ export default function Report() {
       return out;
     });
 
-    // Per L-R ordina per indice di visualizzazione (profonditÃ )
+    // Per L-R ordina per indice di visualizzazione (profondità) e garantisci L prima di R
     rows.sort((a, b) => {
       const ai = a.__displayIndex || Number.MAX_SAFE_INTEGER;
       const bi = b.__displayIndex || Number.MAX_SAFE_INTEGER;
@@ -231,6 +238,23 @@ export default function Report() {
   };
   const lineDistances = computeLineDistancesMeters();
 
+  // Calcola spaziatura tra le linee per L-R (prima linea vs seconda linea, media L/R)
+  const computeLRLineSpacing = () => {
+    if (!results || !results.positions || config.setup_primario !== 'l_r') return null;
+    try {
+      const ys = Array.from(new Set(results.positions
+        .map(p => typeof p.y === 'number' ? +p.y.toFixed(6) : null)
+        .filter(v => v !== null)))
+        .sort((a,b)=>a-b);
+      if (ys.length < 2) return null;
+      const d = Math.abs(ys[1] - ys[0]);
+      return +d.toFixed(2);
+    } catch (e) {
+      return null;
+    }
+  };
+  const lrLineSpacing = computeLRLineSpacing();
+
   return (
     <div className={`min-h-screen ${bgMain} p-3 md:p-6`}>
       <div className="max-w-7xl mx-auto">
@@ -269,7 +293,7 @@ export default function Report() {
               </div>
               <Separator className={isDarkTheme ? 'bg-slate-700' : 'bg-gray-300'}/>
               <div className="flex justify-between items-center">
-                <span className={textSecondary}>NÂ° Sub / Taglio:</span> 
+                <span className={textSecondary}>N° Sub / Taglio:</span> 
                 <span className={`font-semibold ${textPrimary}`}>{config.numero_subwoofer} x {config.taglio}</span>
               </div>
               <Separator className={isDarkTheme ? 'bg-slate-700' : 'bg-gray-300'}/>
@@ -283,7 +307,18 @@ export default function Report() {
                   <div className="flex justify-between items-center">
                     <span className={textSecondary}>PAN Fisico:</span> 
                     <span className={`font-semibold ${textPrimary}`}>
-                      {`${Number(config.gradi_pan || 0).toFixed(0)}Â° (L=+${Number(config.gradi_pan || 0).toFixed(0)}Â°, R=âˆ’${Number(config.gradi_pan || 0).toFixed(0)}Â°)`}
+                      {`${Number(config.gradi_pan || 0).toFixed(0)}° (L=+${Number(config.gradi_pan || 0).toFixed(0)}°, R=−${Number(config.gradi_pan || 0).toFixed(0)}°)`}
+                    </span>
+                  </div>
+                </>
+              )}
+              {config.setup_primario === 'l_r' && (
+                <>
+                  <Separator className={isDarkTheme ? 'bg-slate-700' : 'bg-gray-300'}/>
+                  <div className="flex justify-between items-center">
+                    <span className={textSecondary}>Spaziatura linee (L‑R) (GRIGLIA-GRIGLIA):</span>
+                    <span className={`font-semibold ${textPrimary}`}>
+                      {typeof lrLineSpacing === 'number' ? `L1/R3 – L2/R4 ${lrLineSpacing.toFixed(2)} m` : 'N/D'}
                     </span>
                   </div>
                 </>
@@ -303,6 +338,21 @@ export default function Report() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-2 md:p-3">
+                {/* Per L-R, mostra in alto la spaziatura tra linee come L1/R3 – L2/R4 */}
+                {config.setup_primario === 'l_r' && (
+                  <div className="mb-3">
+                    <div className={`uppercase tracking-wide font-semibold text-xs md:text-sm ${textSecondary}`}>
+                      Spaziatura tra le linee (L-R) (GRIGLIA-GRIGLIA)
+                    </div>
+                    <div className={`${textPrimary} mt-1 font-mono text-base md:text-lg font-semibold`}>
+                      {typeof lrLineSpacing === 'number' ? (
+                        <span>L1/R3 – L2/R4 {lrLineSpacing.toFixed(2)} m</span>
+                      ) : (
+                        <span className="opacity-70">N/D</span>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {/* Nascondi completamente la dicitura distanza per L - R */}
                 {config.setup_primario !== 'l_r' && (
                   <div className="mb-3">
@@ -334,11 +384,13 @@ export default function Report() {
                       {tableData.map((row, index) => {
                         // Determina gruppo/linea per alternare sfondo: L1/L2... oppure Stack 1/2...
                         let groupIndex = 1;
+                        const simpleLR = (row.sub || '').match(/^([LR])(\d+)/);
                         const lMatch = (row.sub || '').match(/L(\d+)/i);
                         const lrMatch = (row.sub || '').match(/^([lr])\.(\d+)/i);
                         const parenSide = (row.sub || '').match(/\((L|R)\)/i);
                         const sMatch = (row.sub || '').match(/Stack\s+(\d+)/i);
-                        if (lrMatch) groupIndex = lrMatch[1].toLowerCase() === 'l' ? 1 : 2;
+                        if (simpleLR) groupIndex = simpleLR[1].toUpperCase() === 'L' ? 1 : 2;
+                        else if (lrMatch) groupIndex = lrMatch[1].toLowerCase() === 'l' ? 1 : 2;
                         else if (parenSide) groupIndex = parenSide[1].toUpperCase() === 'L' ? 1 : 2;
                         else if (lMatch) groupIndex = parseInt(lMatch[1], 10);
                         else if (sMatch) groupIndex = parseInt(sMatch[1], 10);
@@ -376,6 +428,9 @@ export default function Report() {
                 <BarChart className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
                 Schema (Overview)
               </CardTitle>
+              <CardDescription className={`text-sm ${textSecondary}`}>
+                Stage in alto, Audience in basso
+              </CardDescription>
             </CardHeader>
             <CardContent className="p-3">
               <div className="max-w-3xl mx-auto" style={{ transform: 'scale(0.85)', transformOrigin: 'top center' }}>

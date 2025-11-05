@@ -156,7 +156,7 @@ export default function Prediction() {
             <Card className={`${bgCard} backdrop-blur-xl ${borderCard} shadow-xl`}>
               <CardContent className="p-3 md:p-4">
                 <Label className={`${textSecondary} text-sm mb-2 block`}>
-                  Angolo Arc: {arcAngle}Â°
+                  Angolo Arc: {arcAngle}°
                 </Label>
                 <Slider
                   value={arcAngle}
@@ -167,8 +167,8 @@ export default function Prediction() {
                   className="w-full"
                 />
                 <div className={`flex justify-between text-xs ${textSecondary} mt-2`}>
-                  <span>0Â°</span>
-                  <span>270Â°</span>
+                  <span>0°</span>
+                  <span>270°</span>
                 </div>
               </CardContent>
             </Card>
@@ -178,7 +178,7 @@ export default function Prediction() {
             <Card className={`${bgCard} backdrop-blur-xl ${borderCard} shadow-xl`}>
               <CardContent className="p-3 md:p-4">
                 <Label className={`${textSecondary} text-sm mb-2 block`}>
-                  PAN Fisico: {panAngle}Â° (L=+{panAngle}Â°, R=âˆ’{panAngle}Â°)
+                  PAN Fisico: {panAngle}° (L=+{panAngle}°, R=−{panAngle}°)
                 </Label>
                 <Slider
                   value={panAngle}
@@ -189,8 +189,8 @@ export default function Prediction() {
                   className="w-full"
                 />
                 <div className={`flex justify-between text-xs ${textSecondary} mt-2`}>
-                  <span>âˆ’90Â°</span>
-                  <span>+90Â°</span>
+                  <span>−90°</span>
+                  <span>+90°</span>
                 </div>
               </CardContent>
             </Card>

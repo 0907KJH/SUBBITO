@@ -111,7 +111,7 @@ export default function Overview() {
           <h1 className={`text-2xl md:text-4xl font-bold ${textPrimary} mb-2`}>
             Overview: {results.title}
           </h1>
-          <p className={`text-sm md:text-base ${textSecondary}`}>
+          <p className={`text-2xl md:text-3xl font-bold ${textSecondary}`}>
             Vista dall'alto - Stage in alto, Audience in basso
           </p>
         </div>
