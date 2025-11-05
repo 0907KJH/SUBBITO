@@ -9,3 +9,4 @@ export const TableCell = ({ children, className = '' }) => <td className={`p-2 $
 
 export default Table;
 
+

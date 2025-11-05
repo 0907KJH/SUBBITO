@@ -19,3 +19,4 @@ export const calculateWavelength = (frequency) => {
 };
 
 // Altre utility functions possono essere aggiunte qui
+

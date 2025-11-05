@@ -640,11 +640,11 @@ export const calculateSubwooferSetup = (config) => {
   // STACK CARDIOID (solo)
   else if (setup_primario === 'stack_cardioid' && setup_secondario === 'nessuno') {
     const numModules = parseInt(numero_stack_cardioid) || 3;
-    // console.log('[acousticCalculations] Stack Cardioid:', { numSubs, numModules, profondita_sub_cardioid });
+    // // console.log('[acousticCalculations] Stack Cardioid:', { numSubs, numModules, profondita_sub_cardioid });
     finalResults.title = `Stack Cardioid (${numModules} moduli/stack)`;
     const calc = calculateStackCardioid(numSubs, numModules, profondita_sub_cardioid, frequenza_crossover);
     
-    // console.log('[acousticCalculations] Stack Cardioid result:', calc);
+    // // console.log('[acousticCalculations] Stack Cardioid result:', calc);
     finalResults.positions = calc.positions;
     finalResults.dimensions = { width: calc.width, depth: calc.depth };
     finalResults.summary.push(`Numero stack: ${calc.numStacks}`);
@@ -836,4 +836,5 @@ export const calculateSubwooferSetup = (config) => {
 
   return finalResults;
 };
+
 

@@ -474,3 +474,4 @@ export default function AcousticHeatmap({ positions, config, frequency, arcAngle
   );
 }
 
+

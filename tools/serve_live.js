@@ -57,6 +57,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  // console.log(`Serving public/ on http://localhost:${PORT} (index.live.html as SPA entry)`);
+  // // console.log(`Serving public/ on http://localhost:${PORT} (index.live.html as SPA entry)`);
 });
+
 

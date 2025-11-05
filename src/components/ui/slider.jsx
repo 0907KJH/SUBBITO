@@ -13,3 +13,4 @@ export function Slider({ className, value, onChange, min, max, step, ...props })
     />
   );
 }
+

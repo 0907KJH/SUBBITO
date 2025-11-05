@@ -53,13 +53,13 @@ export default function Home() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // console.log('[Home] Loaded config from sessionStorage:', parsed);
+        // // console.log('[Home] Loaded config from sessionStorage:', parsed);
         return parsed;
       } catch (e) {
         console.error('[Home] Error loading saved config:', e);
       }
     }
-    // console.log('[Home] Using default config');
+    // // console.log('[Home] Using default config');
     // Configurazione di default
     return {
       numero_subwoofer: "",
@@ -85,14 +85,14 @@ export default function Home() {
 
   // Salva la configurazione ogni volta che cambia
   useEffect(() => {
-    // console.log('[Home] Saving config to sessionStorage:', config);
+    // // console.log('[Home] Saving config to sessionStorage:', config);
     sessionStorage.setItem('subbito_current_config', JSON.stringify(config));
   }, [config]);
 
   // Log non invasivo dell'ultimo cambio (evita ReferenceError se usato nei callback)
   useEffect(() => {
     if (lastChange) {
-      // console.debug('[Home] Last change:', lastChange);
+      // // console.debug('[Home] Last change:', lastChange);
     }
   }, [lastChange]);
 
@@ -400,7 +400,7 @@ export default function Home() {
     // Calcola i risultati usando gli algoritmi acustici
     try {
       const results = calculateSubwooferSetup(config);
-      // console.log('[Home] Calculation results:', results);
+      // // console.log('[Home] Calculation results:', results);
       
       // Salva in sessionStorage per permettere navigazione
       sessionStorage.setItem('subbito_calculation_done', 'true');
@@ -422,7 +422,7 @@ export default function Home() {
   // Helper to handle both native event handlers and direct value callbacks (from Select)
   const setField = (field) => (valOrEvent) => {
     const value = valOrEvent && valOrEvent.target ? valOrEvent.target.value : valOrEvent;
-    // console.log('[Home] field change:', field, value);
+    // // console.log('[Home] field change:', field, value);
     setConfig(prev => ({ ...prev, [field]: value }));
     
     // Se Ã¨ gradi_arc, aggiorna anche sessionStorage e notifica Overview
@@ -1315,3 +1315,4 @@ export default function Home() {
     </div>
   );
 }
+

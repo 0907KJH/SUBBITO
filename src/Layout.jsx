@@ -303,3 +303,4 @@ const router = createBrowserRouter([
 export default function Layout() {
   return <RouterProvider router={router} />;
 }
+
