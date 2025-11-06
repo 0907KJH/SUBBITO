@@ -646,7 +646,7 @@ export default function EnhancedSetupVisualizer({ positions, dimensions, config,
             <div className={`grid grid-cols-2 gap-4 p-4 ${cardBg} rounded-lg border ${cardBorder}`}>
                 {longitudinalSpacing > 0 && (
                     <div className="space-y-1">
-                        <p className={`text-xs ${cardTextPrimary}`}>Spacing Longitudinale</p>
+                        <p className={`text-xs ${cardTextPrimary}`}>SPACING (centro-centro)</p>
                         <p className={`text-xl font-bold ${cardTextValue}`}>{longitudinalSpacing.toFixed(2)} m</p>
                     </div>
                 )}

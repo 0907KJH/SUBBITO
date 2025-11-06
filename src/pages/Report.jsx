@@ -374,7 +374,7 @@ export default function Report() {
                     <TableHeader>
                       <TableRow className={isDarkTheme ? 'border-slate-700' : 'border-gray-300'}>
                         <TableHead className={`${textSecondary} text-xs md:text-sm`}>SUB</TableHead>
-                        <TableHead className={`${textSecondary} text-xs md:text-sm`}>SPAZIATURA</TableHead>
+                        <TableHead className={`${textSecondary} text-xs md:text-sm`}>SPACING (centro-centro)</TableHead>
                         <TableHead className={`${textSecondary} text-xs md:text-sm`}>DELAY</TableHead>
                         <TableHead className={`${textSecondary} text-xs md:text-sm`}>FASE</TableHead>
                         <TableHead className={`${textSecondary} text-xs md:text-sm`}>NOTE</TableHead>
