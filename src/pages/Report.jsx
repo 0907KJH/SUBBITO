@@ -31,19 +31,19 @@ export default function Report() {
   // Try location.state first, then sessionStorage
   let config, results;
   if (location.state?.config && location.state?.results) {
-    // // console.log('[Report] Loading from location.state');
+    // // // console.log('[Report] Loading from location.state');
     config = location.state.config;
     results = location.state.results;
   } else {
-    // // console.log('[Report] Trying sessionStorage');
+    // // // console.log('[Report] Trying sessionStorage');
     const stored = sessionStorage.getItem('subbito_results');
     if (stored) {
       const parsed = JSON.parse(stored);
-      // // console.log('[Report] Loaded from sessionStorage:', parsed);
+      // // // console.log('[Report] Loaded from sessionStorage:', parsed);
       config = parsed.config;
       results = parsed.results;
     } else {
-      // // console.log('[Report] No data in sessionStorage');
+      // // // console.log('[Report] No data in sessionStorage');
     }
   }
   
@@ -51,12 +51,12 @@ export default function Report() {
 
   // Debug effect
   useEffect(() => {
-    // // console.log('[Report] Config:', config);
-    // // console.log('[Report] Results:', results);
+    // // // console.log('[Report] Config:', config);
+    // // // console.log('[Report] Results:', results);
     if (results) {
-      // // console.log('[Report] Results.summary:', results.summary);
-      // // console.log('[Report] Results.notes:', results.notes);
-      // // console.log('[Report] Results.delayTable:', results.delayTable);
+      // // // console.log('[Report] Results.summary:', results.summary);
+      // // // console.log('[Report] Results.notes:', results.notes);
+      // // // console.log('[Report] Results.delayTable:', results.delayTable);
     }
   }, []);
 
@@ -374,7 +374,7 @@ export default function Report() {
                     <TableHeader>
                       <TableRow className={isDarkTheme ? 'border-slate-700' : 'border-gray-300'}>
                         <TableHead className={`${textSecondary} text-xs md:text-sm`}>SUB</TableHead>
-                        <TableHead className={`${textSecondary} text-xs md:text-sm`}>SPACING (centro-centro)</TableHead>
+                        <TableHead className={`${textSecondary} text-xs md:text-sm`}>SPAZIATURA</TableHead>
                         <TableHead className={`${textSecondary} text-xs md:text-sm`}>DELAY</TableHead>
                         <TableHead className={`${textSecondary} text-xs md:text-sm`}>FASE</TableHead>
                         <TableHead className={`${textSecondary} text-xs md:text-sm`}>NOTE</TableHead>
@@ -469,4 +469,5 @@ export default function Report() {
     </div>
   );
 }
+
 

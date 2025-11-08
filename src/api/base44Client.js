@@ -8,15 +8,16 @@ export const base44 = {
       },
       create: async (config) => {
         // Simula il salvataggio di una nuova configurazione
-        // // console.log('Saving config:', config);
+        // // // console.log('Saving config:', config);
         return { id: Date.now(), ...config };
       },
       delete: async (id) => {
         // Simula l'eliminazione di una configurazione
-        // // console.log('Deleting config:', id);
+        // // // console.log('Deleting config:', id);
         return true;
       }
     }
   }
 };
+
 

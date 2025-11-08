@@ -198,14 +198,31 @@ export default function AcousticHeatmap({ positions, config, frequency, arcAngle
     const effectiveMaxY = maxSubY + verticalPaddingBottom;
     const effectiveViewHeight = effectiveMaxY - effectiveMinY;
 
-    // Rapporto d'aspetto piÃ¹ contenuto (1.0 = quadrato, valori piÃ¹ bassi = piÃ¹ alto che largo)
+    // Rapporto d'aspetto: per L-R garantiamo un'altezza minima proporzionale alla larghezza
+    const isLR = config?.setup_primario === 'l_r';
     const targetAspectRatio = 0.8;
 
-    let desiredViewWidth = effectiveViewHeight * targetAspectRatio;
-
-    // Assicurati che sia largo abbastanza per i sub + padding
+    // Calcola larghezza minima richiesta per i sub
     const minRequiredWidth = (maxSubX - minSubX) + 2.0;
+    
+    let desiredViewWidth = effectiveViewHeight * targetAspectRatio;
     desiredViewWidth = Math.max(desiredViewWidth, minRequiredWidth);
+    
+    // Per L-R, garantiamo un'altezza minima basata sulla larghezza (rapporto inverso)
+    let finalViewHeight = effectiveViewHeight;
+    if (isLR) {
+      const minHeightForLR = desiredViewWidth / targetAspectRatio;
+      finalViewHeight = Math.max(effectiveViewHeight, minHeightForLR);
+    }
+
+    // Centra verticalmente se abbiamo espanso l'altezza per L-R
+    let adjustedMinY = effectiveMinY;
+    let adjustedMaxY = effectiveMaxY;
+    if (isLR && finalViewHeight > effectiveViewHeight) {
+      const extraHeight = finalViewHeight - effectiveViewHeight;
+      adjustedMinY = effectiveMinY - extraHeight / 2;
+      adjustedMaxY = effectiveMaxY + extraHeight / 2;
+    }
 
     // Centra orizzontalmente
     const centerX = (minSubX + maxSubX) / 2;
@@ -215,8 +232,8 @@ export default function AcousticHeatmap({ positions, config, frequency, arcAngle
     return {
       minX: effectiveMinX,
       maxX: effectiveMaxX,
-      minY: effectiveMinY,
-      maxY: effectiveMaxY
+      minY: adjustedMinY,
+      maxY: adjustedMaxY
     };
   }, [subPositions]);
 
@@ -245,9 +262,18 @@ export default function AcousticHeatmap({ positions, config, frequency, arcAngle
       const maxXsp = Math.max(...xs);
       const centerX = (minXsp + maxXsp) / 2;
       const span = Math.max(0.1, (maxXsp - minXsp));
-      const leftSample = minXsp + 0.15 * span;
-      const rightSample = maxXsp - 0.15 * span;
-      const samplesX = [leftSample, centerX, rightSample];
+      // Per L-R + Endfire: campiona solo le colonne reali (evita il centro vuoto)
+      const isLREndfire = config?.setup_primario === 'l_r' && config?.setup_secondario === 'endfire';
+      let samplesX;
+      if (isLREndfire) {
+        // Campiona solo X delle colonne LEFT e RIGHT (salta il centro)
+        const uniqueX = [...new Set(subPositions.map(s => s.x))].sort((a, b) => a - b);
+        samplesX = uniqueX.length >= 2 ? [uniqueX[0], uniqueX[uniqueX.length - 1]] : uniqueX;
+      } else {
+        const leftSample = minXsp + 0.15 * span;
+        const rightSample = maxXsp - 0.15 * span;
+        samplesX = [leftSample, centerX, rightSample];
+      }
       const yForward = Math.max(...ys) + 5;   // verso AUDIENCE (in basso)
       const yBackward = Math.min(...ys) - 5;  // verso STAGE (in alto)
 
@@ -273,7 +299,9 @@ export default function AcousticHeatmap({ positions, config, frequency, arcAngle
 
       const scoreMinus = fwdMinus - backMinus;
       const scorePlus  = fwdPlus - backPlus;
-      endfireUseMinus = scoreMinus >= scorePlus;
+      // Per Endfire, il segno Ã¨ sempre MINUS (k*r - Ï‰Ï„) - il delay ritarda la fase
+      // Per L-R + Endfire usa FALSE, per Endfire primario usa auto-rilevamento
+      endfireUseMinus = isLREndfire ? false : (scoreMinus >= scorePlus);
     }
 
     for (let row = 0; row < gridSize; row++) {
@@ -473,5 +501,7 @@ export default function AcousticHeatmap({ positions, config, frequency, arcAngle
     </svg>
   );
 }
+
+
 
 
